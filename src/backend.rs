@@ -83,6 +83,7 @@ impl FilterEntry for RevisionEntry {
     }
 }
 
+#[derive(Debug)]
 pub struct LogEntry {
     pub graph: String,
     pub hash: String,
@@ -134,6 +135,8 @@ pub trait Backend: 'static + Send + Sync {
     fn fetch(&self) -> BackendResult<()>;
     fn pull(&self) -> BackendResult<()>;
     fn push(&self) -> BackendResult<()>;
+    fn push_gerrit(&self) -> BackendResult<()>;
+    fn reset(&self, revision: &str) -> BackendResult<()>;
 
     fn revision_details(&self, revision: &str) -> BackendResult<RevisionInfo>;
 

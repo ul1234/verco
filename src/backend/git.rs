@@ -17,6 +17,30 @@ impl Git {
         let root = Path::new(output.trim()).into();
         Some((root, Self))
     }
+
+    fn remote(&self) -> BackendResult<String> {
+        let remote = Process::spawn("git", &["remote"])?
+            .wait()?
+            .trim()
+            .to_owned();
+        Ok(remote)
+    }
+
+    fn current_branch(&self) -> BackendResult<String> {
+        let branch = Process::spawn("git", &["symbolic-ref", "--short", "HEAD"])?
+            .wait()?
+            .trim()
+            .to_owned();
+        Ok(branch)
+    }
+
+    fn remote_branch(&self) -> BackendResult<String> {
+        let mut remote = self.remote()?;
+        let current_branch = self.current_branch()?;
+        remote.push_str("/");
+        remote.push_str(&current_branch);
+        Ok(remote)
+    }
 }
 
 impl Backend for Git {
@@ -212,7 +236,7 @@ impl Backend for Git {
             "git",
             &[
                 "log",
-                "--all",
+                //"--all",
                 "--decorate",
                 "--oneline",
                 "--graph",
@@ -271,6 +295,30 @@ impl Backend for Git {
 
     fn push(&self) -> BackendResult<()> {
         Process::spawn("git", &["push"])?.wait()?;
+        Ok(())
+    }
+
+    fn push_gerrit(&self) -> BackendResult<()> {
+        let remote = self.remote()?;
+        let current_branch = self.current_branch()?;
+        let mut branch_info = "HEAD:refs/for/".to_owned();
+        branch_info.push_str(&current_branch);
+        Process::spawn("git", &["push", &remote, &branch_info])?.wait()?;
+        Ok(())
+    }
+
+    // fn stash(&self) -> BackendResult<()> {
+    //     Process::spawn("git", &["stash"])?.wait()?;
+    //     Ok(())
+    // }
+
+    fn reset(&self, revision: &str) -> BackendResult<()> {
+        let revision = if revision == "" {
+            self.remote_branch()?
+        } else {
+            revision.to_owned()
+        };
+        Process::spawn("git", &["reset", "--hard", &revision])?.wait()?;
         Ok(())
     }
 

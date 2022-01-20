@@ -18,6 +18,7 @@ enum WaitOperation {
     Fetch,
     Pull,
     Push,
+    Reset,
 }
 
 enum State {
@@ -40,7 +41,7 @@ impl SelectEntryDraw for LogEntry {
             }
         }
 
-        const MAX_AUTHOR_CHAR_COUNT: usize = 12;
+        const MAX_AUTHOR_CHAR_COUNT: usize = 18;
         let author = match self.author.char_indices().nth(MAX_AUTHOR_CHAR_COUNT) {
             Some((i, _)) => &self.author[..i],
             None => &self.author,
@@ -189,13 +190,25 @@ impl Mode {
                 self.filter.enter();
             } else if let State::Idle = self.state {
                 match key {
-                    Key::Char('G') => {
+                    Key::Char('c') => {
                         if let Some(current_entry_index) = current_entry_index {
                             let entry = &self.entries[current_entry_index];
                             self.state = State::Waiting(WaitOperation::Checkout);
                             let revision = entry.hash.clone();
                             request(ctx, move |b| b.checkout(&revision));
                         }
+                    }
+                    Key::Char('r') => {
+                        if let Some(current_entry_index) = current_entry_index {
+                            let entry = &self.entries[current_entry_index];
+                            self.state = State::Waiting(WaitOperation::Reset);
+                            let revision = entry.hash.clone();
+                            request(ctx, move |b| b.reset(&revision));
+                        }
+                    }
+                    Key::Char('R') => {
+                        self.state = State::Waiting(WaitOperation::Reset);
+                        request(ctx, move |b| b.reset(""));
                     }
                     Key::Char('m') => {
                         if let Some(current_entry_index) = current_entry_index {
@@ -215,7 +228,8 @@ impl Mode {
                     }
                     Key::Char('P') => {
                         self.state = State::Waiting(WaitOperation::Push);
-                        request(ctx, Backend::push);
+                        //request(ctx, Backend::push);
+                        request(ctx, Backend::push_gerrit); // use push to gerrit
                     }
                     _ => (),
                 }
@@ -263,6 +277,7 @@ impl Mode {
     pub fn header(&self) -> (&str, &str, &str) {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "log",
+            State::Waiting(WaitOperation::Reset) => "reset",
             State::Waiting(WaitOperation::Checkout) => "checkout",
             State::Waiting(WaitOperation::Merge) => "merge",
             State::Waiting(WaitOperation::Fetch) => "fetch",
@@ -270,7 +285,8 @@ impl Mode {
             State::Waiting(WaitOperation::Push) => "push",
         };
 
-        let left_help = "[G]checkout [d]details [f]fetch [p]pull [P]push";
+        let left_help =
+            "[c]checkout [d]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
         let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
         (name, left_help, right_help)
     }
@@ -303,6 +319,7 @@ where
 
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
         let result = f(ctx.backend.deref()).and_then(|_| ctx.backend.log(0, available_height));
+        //println!("result: {:?}", result);
         ctx.event_sender
             .send_response(ModeResponse::Log(Response::Refresh(result)));
     });
