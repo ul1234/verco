@@ -7,8 +7,6 @@ use std::{
 use crate::mode::{fuzzy_matches, FilterEntry};
 
 pub mod git;
-pub mod hg;
-pub mod plastic;
 
 pub type BackendResult<T> = std::result::Result<T, String>;
 
@@ -141,7 +139,7 @@ pub trait Backend: 'static + Send + Sync {
 
     fn branches(&self) -> BackendResult<Vec<BranchEntry>>;
     fn new_branch(&self, name: &str) -> BackendResult<()>;
-    fn delete_branch(&self, name: &str) -> BackendResult<()>;
+    fn delete_branch(&self, name: &str, force: bool) -> BackendResult<()>;
 
     fn tags(&self) -> BackendResult<Vec<TagEntry>>;
     fn new_tag(&self, name: &str) -> BackendResult<()>;
@@ -152,10 +150,11 @@ pub struct Process(Child);
 impl Process {
     pub fn spawn(command_name: &str, args: &[&str]) -> BackendResult<Self> {
         let mut command = Command::new(command_name);
-        command.args(args);
-        command.stdin(Stdio::null());
-        command.stdout(Stdio::piped());
-        command.stderr(Stdio::piped());
+        command
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
 
         match command.spawn() {
             Ok(child) => Ok(Self(child)),
@@ -189,10 +188,6 @@ impl Process {
 pub fn backend_from_current_repository() -> Option<(PathBuf, Arc<dyn Backend>)> {
     if let Some((root, git)) = git::Git::try_new() {
         Some((root, Arc::new(git)))
-    } else if let Some((root, hg)) = hg::Hg::try_new() {
-        Some((root, Arc::new(hg)))
-    } else if let Some((root, plastic)) = plastic::Plastic::try_new() {
-        Some((root, Arc::new(plastic)))
     } else {
         None
     }

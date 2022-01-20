@@ -120,7 +120,7 @@ impl Mode {
                             self.filter.clear();
                             self.readline.clear();
                         }
-                        Key::Char('D') => {
+                        c @ Key::Char('D') | c @ Key::Char('d') => {
                             if let Some(current_entry_index) = current_entry_index {
                                 let entry = &self.entries[current_entry_index];
                                 self.state = State::Waiting(WaitOperation::Delete);
@@ -130,7 +130,9 @@ impl Mode {
                                 self.filter.on_remove_entry(current_entry_index);
                                 self.select.on_remove_entry(self.select.cursor);
 
-                                request(ctx, move |b| b.delete_branch(&name));
+                                let force = c == Key::Char('D'); // D means force delete
+
+                                request(ctx, move |b| b.delete_branch(&name, force));
                             }
                         }
                         Key::Char('m') => {
@@ -223,7 +225,7 @@ impl Mode {
         };
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
-                "[g]checkout [n]new [D]delete [m]merge",
+                "[g]checkout [n]new [d]delete [D]force delete [m]merge",
                 "[arrows]move [ctrl+f]filter",
             ),
             State::NewNameInput => (
