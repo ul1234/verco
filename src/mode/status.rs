@@ -195,7 +195,14 @@ impl Mode {
                                 request(ctx, move |b| b.resolve_taking_theirs(&entries));
                             }
                         }
-                        Key::Char('d') => {
+                        Key::Ctrl('s') => {
+                            if !self.entries.is_empty() {
+                                let entries = self.get_selected_entries();
+
+                                request(ctx, move |b| b.stash(&entries));
+                            }
+                        }
+                        Key::Enter => {
                             if !self.entries.is_empty() {
                                 self.state = State::ViewDiff;
                                 self.output.set(String::new());
@@ -303,7 +310,7 @@ impl Mode {
         };
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
-                "[c]commit [R]revert [d]diff [O]take ours [T]take theirs",
+                "[c]commit [R]revert [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
                 "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
             State::CommitMessageInput => (

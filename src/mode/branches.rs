@@ -93,7 +93,7 @@ impl Mode {
                     let current_entry_index = self.filter.get_visible_index(self.select.cursor);
                     match key {
                         Key::Ctrl('f') => self.filter.enter(),
-                        Key::Char('c') => {
+                        Key::Enter => {
                             if let Some(current_entry_index) = current_entry_index {
                                 let entry = &self.entries[current_entry_index];
                                 let name = entry.name.clone();
@@ -225,7 +225,7 @@ impl Mode {
         };
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
-                "[c]checkout [n]new [d]delete [D]force delete [m]merge",
+                "[enter]checkout [n]new [d]delete [D]force delete [m]merge",
                 "[arrows]move [ctrl+f]filter",
             ),
             State::NewNameInput => (

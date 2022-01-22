@@ -178,7 +178,7 @@ impl Mode {
                 });
             }
 
-            if let Key::Char('d') = key {
+            if let Key::Enter = key {
                 if let Some(current_entry_index) = current_entry_index {
                     let entry = &self.entries[current_entry_index];
                     ctx.event_sender
@@ -286,7 +286,7 @@ impl Mode {
         };
 
         let left_help =
-            "[c]checkout [d]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
+            "[c]checkout [enter]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
         let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
         (name, left_help, right_help)
     }

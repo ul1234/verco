@@ -307,10 +307,20 @@ impl Backend for Git {
         Ok(())
     }
 
-    // fn stash(&self) -> BackendResult<()> {
-    //     Process::spawn("git", &["stash"])?.wait()?;
-    //     Ok(())
-    // }
+    fn stash(&self, entries: &[RevisionEntry]) -> BackendResult<()> {
+        if entries.is_empty() {
+            Process::spawn("git", &["stash"])?.wait()?;
+        } else {
+            let mut args = vec!["stash", "--"];
+            for entry in entries {
+                args.push(&entry.name);
+            }
+
+            Process::spawn("git", &args)?.wait()?;
+        }
+
+        Ok(())
+    }
 
     fn reset(&self, revision: &str) -> BackendResult<()> {
         let revision = if revision == "" {
