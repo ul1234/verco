@@ -1,11 +1,12 @@
-use std::thread;
-
 use crate::{
     backend::{Backend, BackendResult, LogEntry},
-    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, Output, SelectMenu},
+    mode::{
+        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu,
+    },
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
+use std::thread;
 
 pub enum Response {
     Refresh(BackendResult<(usize, Vec<LogEntry>)>),
@@ -132,8 +133,8 @@ pub struct Mode {
     filter: Filter,
     show_full_hovered_message: bool,
 }
-impl Mode {
-    pub fn on_enter(&mut self, ctx: &ModeContext) {
+impl ModeTrait for Mode {
+    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -148,7 +149,7 @@ impl Mode {
         request(ctx, |_| Ok(()));
     }
 
-    pub fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
         let pending_input = self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
@@ -239,7 +240,8 @@ impl Mode {
         ModeStatus { pending_input }
     }
 
-    pub fn on_response(&mut self, response: Response) {
+    fn on_response(&mut self, response: ModeResponse) {
+        let response = as_variant!(response, ModeResponse::Log).unwrap();
         match response {
             Response::Refresh(result) => {
                 self.output.set(String::new());
@@ -267,14 +269,14 @@ impl Mode {
         }
     }
 
-    pub fn is_waiting_response(&self) -> bool {
+    fn is_waiting_response(&self) -> bool {
         match self.state {
             State::Idle => false,
             State::Waiting(_) => true,
         }
     }
 
-    pub fn header(&self) -> (&str, &str, &str) {
+    fn header(&self) -> (&str, &str, &str) {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "log",
             State::Waiting(WaitOperation::Reset) => "reset",
@@ -291,7 +293,7 @@ impl Mode {
         (name, left_help, right_help)
     }
 
-    pub fn draw(&self, drawer: &mut Drawer) {
+    fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
         if self.output.text().is_empty() {
             drawer.select_menu(

@@ -2,7 +2,10 @@ use std::thread;
 
 use crate::{
     backend::{Backend, BackendResult, TagEntry},
-    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, Output, ReadLine, SelectMenu},
+    mode::{
+        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine,
+        SelectMenu,
+    },
     platform::Key,
     ui::{Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -45,8 +48,8 @@ pub struct Mode {
     filter: Filter,
     readline: ReadLine,
 }
-impl Mode {
-    pub fn on_enter(&mut self, ctx: &ModeContext) {
+impl ModeTrait for Mode {
+    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -61,7 +64,7 @@ impl Mode {
         request(ctx, |_| Ok(()));
     }
 
-    pub fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
         let pending_input = matches!(self.state, State::NewNameInput) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
@@ -136,7 +139,7 @@ impl Mode {
                         let name = self.readline.input().to_string();
                         request(ctx, move |b| b.new_tag(&name));
                     } else if key.is_cancel() {
-                        self.on_enter(ctx);
+                        self.on_enter(ctx, "");
                     }
                 }
             }
@@ -145,7 +148,8 @@ impl Mode {
         ModeStatus { pending_input }
     }
 
-    pub fn on_response(&mut self, response: Response) {
+    fn on_response(&mut self, response: ModeResponse) {
+        let response = as_variant!(response, ModeResponse::Tags).unwrap();
         match response {
             Response::Refresh(result) => {
                 self.entries = Vec::new();
@@ -169,14 +173,14 @@ impl Mode {
         }
     }
 
-    pub fn is_waiting_response(&self) -> bool {
+    fn is_waiting_response(&self) -> bool {
         match self.state {
             State::Idle | State::NewNameInput => false,
             State::Waiting(_) => true,
         }
     }
 
-    pub fn header(&self) -> (&str, &str, &str) {
+    fn header(&self) -> (&str, &str, &str) {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "tags",
             State::Waiting(WaitOperation::New) => "new tag",
@@ -196,7 +200,7 @@ impl Mode {
         (name, left_help, right_help)
     }
 
-    pub fn draw(&self, drawer: &mut Drawer) {
+    fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
         match self.state {
             State::Idle | State::Waiting(_) => {

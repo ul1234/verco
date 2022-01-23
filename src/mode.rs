@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use crate::{application::EventSender, backend::Backend, platform::Key};
+use crate::{application::EventSender, backend::Backend, platform::Key, ui::Drawer};
 
 pub mod branches;
 pub mod log;
 pub mod revision_details;
+pub mod stash;
 pub mod status;
 pub mod tags;
 
@@ -14,6 +15,7 @@ pub enum ModeResponse {
     RevisionDetails(revision_details::Response),
     Branches(branches::Response),
     Tags(tags::Response),
+    Stash(stash::Response),
 }
 
 pub enum ModeKind {
@@ -22,11 +24,21 @@ pub enum ModeKind {
     RevisionDetails(String),
     Branches,
     Tags,
+    Stash,
 }
 impl Default for ModeKind {
     fn default() -> Self {
         Self::Status
     }
+}
+
+pub trait ModeTrait {
+    fn on_enter(&mut self, ctx: &ModeContext, revision: &str);
+    fn on_key(&mut self, ctx: &ModeContext, key: Key, revision: &str) -> ModeStatus;
+    fn is_waiting_response(&self) -> bool;
+    fn on_response(&mut self, response: ModeResponse);
+    fn header(&self) -> (&str, &str, &str);
+    fn draw(&self, drawer: &mut Drawer);
 }
 
 #[derive(Clone)]
@@ -145,7 +157,7 @@ pub enum SelectMenuAction {
 #[derive(Default)]
 pub struct SelectMenu {
     pub cursor: usize,
-    pub scroll: usize,
+    pub scroll: usize, // index of the first line when scrolling
 }
 impl SelectMenu {
     pub fn saturate_cursor(&mut self, entries_len: usize) {

@@ -1,5 +1,7 @@
 use std::{env, io};
 
+#[macro_use]
+mod macros;
 mod application;
 mod backend;
 mod mode;

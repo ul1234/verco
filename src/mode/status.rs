@@ -3,8 +3,8 @@ use std::thread;
 use crate::{
     backend::{Backend, BackendResult, FileStatus, RevisionEntry, StatusInfo},
     mode::{
-        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, Output, ReadLine, SelectMenu,
-        SelectMenuAction,
+        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine,
+        SelectMenu, SelectMenuAction,
     },
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
@@ -104,8 +104,10 @@ impl Mode {
             self.filter.clear();
         }
     }
+}
 
-    pub fn on_enter(&mut self, ctx: &ModeContext) {
+impl ModeTrait for Mode {
+    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -120,7 +122,7 @@ impl Mode {
         request(ctx, |_| Ok(()));
     }
 
-    pub fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
         let pending_input =
             matches!(self.state, State::CommitMessageInput) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
@@ -252,7 +254,7 @@ impl Mode {
                             }
                         });
                     } else if key.is_cancel() {
-                        self.on_enter(ctx);
+                        self.on_enter(ctx, "");
                     }
                 }
                 _ => self.output.on_key(available_height, key),
@@ -262,7 +264,8 @@ impl Mode {
         ModeStatus { pending_input }
     }
 
-    pub fn on_response(&mut self, response: Response) {
+    fn on_response(&mut self, response: ModeResponse) {
+        let response = as_variant!(response, ModeResponse::Status).unwrap();
         match response {
             Response::Refresh(info) => {
                 if let State::Waiting(_) = self.state {
@@ -290,7 +293,7 @@ impl Mode {
         }
     }
 
-    pub fn is_waiting_response(&self) -> bool {
+    fn is_waiting_response(&self) -> bool {
         match self.state {
             State::Idle | State::CommitMessageInput => false,
             State::Waiting(_) => true,
@@ -298,7 +301,7 @@ impl Mode {
         }
     }
 
-    pub fn header(&self) -> (&str, &str, &str) {
+    fn header(&self) -> (&str, &str, &str) {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "status",
             State::CommitMessageInput => "commit message",
@@ -322,7 +325,7 @@ impl Mode {
         (name, left_help, right_help)
     }
 
-    pub fn draw(&self, drawer: &mut Drawer) {
+    fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
         match self.state {
             State::Idle | State::Waiting(_) => {

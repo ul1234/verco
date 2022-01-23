@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     backend::Backend,
-    mode::{self, ModeContext, ModeKind, ModeResponse},
+    mode::{self, ModeContext, ModeKind, ModeResponse, ModeTrait},
     platform::{Key, Platform, PlatformEventReader},
     ui::Drawer,
 };
@@ -38,46 +38,62 @@ impl EventSender {
 
 #[derive(Default)]
 struct Application {
-    current_mode: ModeKind,
+    current_mode_kind: ModeKind,
 
     status_mode: mode::status::Mode,
     log_mode: mode::log::Mode,
     revision_details_mode: mode::revision_details::Mode,
     branches_mode: mode::branches::Mode,
     tags_mode: mode::tags::Mode,
+    stash_mode: mode::stash::Mode,
 
     spinner_state: u8,
 }
 impl Application {
-    pub fn enter_mode(&mut self, ctx: &ModeContext, mode: ModeKind) {
-        self.current_mode = mode;
-        match &self.current_mode {
-            ModeKind::Status => self.status_mode.on_enter(ctx),
-            ModeKind::Log => self.log_mode.on_enter(ctx),
-            ModeKind::RevisionDetails(revision) => {
-                self.revision_details_mode.on_enter(ctx, revision);
-            }
-            ModeKind::Branches => self.branches_mode.on_enter(ctx),
-            ModeKind::Tags => self.tags_mode.on_enter(ctx),
+    fn current_mode(&mut self) -> &mut dyn ModeTrait {
+        match &self.current_mode_kind {
+            ModeKind::Status => &mut self.status_mode,
+            ModeKind::Log => &mut self.log_mode,
+            ModeKind::RevisionDetails(_) => &mut self.revision_details_mode,
+            ModeKind::Branches => &mut self.branches_mode,
+            ModeKind::Tags => &mut self.tags_mode,
+            ModeKind::Stash => &mut self.stash_mode,
         }
     }
 
-    pub fn refresh_mode(&mut self, ctx: &ModeContext, mode: ModeKind) {
-        if std::mem::discriminant(&self.current_mode) == std::mem::discriminant(&mode) {
-            self.enter_mode(ctx, mode);
+    fn response_mode(&mut self, response: &ModeResponse) -> &mut dyn ModeTrait {
+        match response {
+            ModeResponse::Status(_) => &mut self.status_mode,
+            ModeResponse::Log(_) => &mut self.log_mode,
+            ModeResponse::RevisionDetails(_) => &mut self.revision_details_mode,
+            ModeResponse::Branches(_) => &mut self.branches_mode,
+            ModeResponse::Tags(_) => &mut self.tags_mode,
+            ModeResponse::Stash(_) => &mut self.stash_mode,
+        }
+    }
+
+    fn revision(&self) -> &str {
+        match &self.current_mode_kind {
+            ModeKind::RevisionDetails(revision) => revision,
+            _ => "",
+        }
+    }
+
+    pub fn enter_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind) {
+        self.current_mode_kind = mode_kind;
+        let revision = self.revision().to_owned();
+        self.current_mode().on_enter(ctx, &revision);
+    }
+
+    pub fn refresh_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind) {
+        if std::mem::discriminant(&self.current_mode_kind) == std::mem::discriminant(&mode_kind) {
+            self.enter_mode(ctx, mode_kind);
         }
     }
 
     pub fn on_key(&mut self, ctx: &ModeContext, key: Key) -> bool {
-        let status = match &self.current_mode {
-            ModeKind::Status => self.status_mode.on_key(ctx, key),
-            ModeKind::Log => self.log_mode.on_key(ctx, key),
-            ModeKind::RevisionDetails(revision) => {
-                self.revision_details_mode.on_key(ctx, revision, key)
-            }
-            ModeKind::Branches => self.branches_mode.on_key(ctx, key),
-            ModeKind::Tags => self.tags_mode.on_key(ctx, key),
-        };
+        let revision = self.revision().to_owned();
+        let status = self.current_mode().on_key(ctx, key, &revision);
 
         if !status.pending_input {
             if key.is_cancel() {
@@ -97,31 +113,11 @@ impl Application {
     }
 
     pub fn on_response(&mut self, response: ModeResponse) {
-        match response {
-            ModeResponse::Status(response) => {
-                self.status_mode.on_response(response);
-            }
-            ModeResponse::Log(response) => self.log_mode.on_response(response),
-            ModeResponse::RevisionDetails(response) => {
-                self.revision_details_mode.on_response(response);
-            }
-            ModeResponse::Branches(response) => {
-                self.branches_mode.on_response(response);
-            }
-            ModeResponse::Tags(response) => {
-                self.tags_mode.on_response(response);
-            }
-        }
+        self.response_mode(&response).on_response(response);
     }
 
-    pub fn is_waiting_response(&self) -> bool {
-        match &self.current_mode {
-            ModeKind::Status => self.status_mode.is_waiting_response(),
-            ModeKind::Log => self.log_mode.is_waiting_response(),
-            ModeKind::RevisionDetails(_) => self.revision_details_mode.is_waiting_response(),
-            ModeKind::Branches => self.branches_mode.is_waiting_response(),
-            ModeKind::Tags => self.tags_mode.is_waiting_response(),
-        }
+    pub fn is_waiting_response(&mut self) -> bool {
+        self.current_mode().is_waiting_response()
     }
 
     pub fn draw_header(&mut self, drawer: &mut Drawer) {
@@ -132,26 +128,12 @@ impl Application {
             false => b' ',
         };
 
-        let (mode_name, left_help, right_help) = match &self.current_mode {
-            ModeKind::Status => self.status_mode.header(),
-            ModeKind::Log => self.log_mode.header(),
-            ModeKind::RevisionDetails(_) => self.revision_details_mode.header(),
-            ModeKind::Branches => self.branches_mode.header(),
-            ModeKind::Tags => self.tags_mode.header(),
-        };
+        let (mode_name, left_help, right_help) = self.current_mode().header();
         drawer.header(mode_name, left_help, right_help, spinner);
     }
 
-    pub fn draw_body(&self, drawer: &mut Drawer) {
-        match &self.current_mode {
-            ModeKind::Status => self.status_mode.draw(drawer),
-            ModeKind::Log => self.log_mode.draw(drawer),
-            ModeKind::RevisionDetails(_) => {
-                self.revision_details_mode.draw(drawer);
-            }
-            ModeKind::Branches => self.branches_mode.draw(drawer),
-            ModeKind::Tags => self.tags_mode.draw(drawer),
-        }
+    pub fn draw_body(&mut self, drawer: &mut Drawer) {
+        self.current_mode().draw(drawer);
         drawer.clear_to_bottom();
     }
 }

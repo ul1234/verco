@@ -2,7 +2,10 @@ use std::thread;
 
 use crate::{
     backend::{RevisionEntry, RevisionInfo},
-    mode::{Filter, ModeContext, ModeResponse, ModeStatus, Output, SelectMenu, SelectMenuAction},
+    mode::{
+        Filter, ModeContext, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu,
+        SelectMenuAction,
+    },
     platform::Key,
     ui::{Drawer, RESERVED_LINES_COUNT},
 };
@@ -40,8 +43,10 @@ impl Mode {
             .cloned()
             .collect()
     }
+}
 
-    pub fn on_enter(&mut self, ctx: &ModeContext, revision: &str) {
+impl ModeTrait for Mode {
+    fn on_enter(&mut self, ctx: &ModeContext, revision: &str) {
         if let State::Waiting = self.state {
             return;
         }
@@ -70,7 +75,7 @@ impl Mode {
         });
     }
 
-    pub fn on_key(&mut self, ctx: &ModeContext, revision: &str, key: Key) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key, revision: &str) -> ModeStatus {
         let pending_input = self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
@@ -149,7 +154,8 @@ impl Mode {
         ModeStatus { pending_input }
     }
 
-    pub fn on_response(&mut self, response: Response) {
+    fn on_response(&mut self, response: ModeResponse) {
+        let response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
         match response {
             Response::Info(info) => {
                 if let State::Waiting = self.state {
@@ -176,7 +182,7 @@ impl Mode {
         }
     }
 
-    pub fn is_waiting_response(&self) -> bool {
+    fn is_waiting_response(&self) -> bool {
         match self.state {
             State::Idle => false,
             State::Waiting => true,
@@ -184,7 +190,7 @@ impl Mode {
         }
     }
 
-    pub fn header(&self) -> (&str, &str, &str) {
+    fn header(&self) -> (&str, &str, &str) {
         match self.state {
             State::Idle | State::Waiting => (
                 "revision details",
@@ -195,7 +201,7 @@ impl Mode {
         }
     }
 
-    pub fn draw(&self, drawer: &mut Drawer) {
+    fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
 
         let line_count = if let State::ViewDiff = self.state {
