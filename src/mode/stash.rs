@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub enum Response {
-    Refresh(StatusInfo),
+    Refresh(Vec<String>),
     Commit,
     Diff(String),
 }
@@ -81,7 +81,7 @@ impl Mode {
 }
 
 impl ModeTrait for Mode {
-    fn on_enter(&mut self, ctx: &ModeContext, revision: &str) {
+    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -93,7 +93,7 @@ impl ModeTrait for Mode {
             .saturate_cursor(self.filter.visible_indices().len());
         self.readline.clear();
 
-        //request(ctx, |_| Ok(()));
+        request(ctx, |_| Ok(()));
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
@@ -103,6 +103,7 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Stash).unwrap();
         match response {
+            //Response::Refresh(info) =>
             _ => unimplemented!(),
         }
     }
@@ -120,25 +121,22 @@ impl ModeTrait for Mode {
     }
 }
 
-// fn request<F>(ctx: &ModeContext, f: F)
-// where
-//     F: 'static + Send + Sync + FnOnce(&dyn Backend) -> BackendResult<()>,
-// {
-//     let ctx = ctx.clone();
-//     thread::spawn(move || {
-//         use std::ops::Deref;
+fn request<F>(ctx: &ModeContext, f: F)
+where
+    F: 'static + Send + Sync + FnOnce(&dyn Backend) -> BackendResult<()>,
+{
+    let ctx = ctx.clone();
+    thread::spawn(move || {
+        use std::ops::Deref;
 
-//         let mut info = match f(ctx.backend.deref()).and_then(|_| ctx.backend.stash_list()) {
-//             Ok(info) => info,
-//             Err(error) => StatusInfo {
-//                 header: error,
-//                 entries: Vec::new(),
-//             },
-//         };
-//         info.entries
-//             .sort_unstable_by(|a, b| a.status.cmp(&b.status));
+        let info = match f(ctx.backend.deref()).and_then(|_| ctx.backend.stash_list()) {
+            Ok(info) => info,
+            Err(error) => vec![error],
+        };
+        // info.entries
+        //     .sort_unstable_by(|a, b| a.status.cmp(&b.status));
 
-//         ctx.event_sender
-//             .send_response(ModeResponse::Status(Response::Refresh(info)));
-//     });
-// }
+        ctx.event_sender
+            .send_response(ModeResponse::Stash(Response::Refresh(info)));
+    });
+}

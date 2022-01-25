@@ -121,7 +121,7 @@ impl ModeTrait for Mode {
                         Key::Tab => {
                             self.show_full_message = !self.show_full_message;
                         }
-                        Key::Char('d') => {
+                        Key::Enter => {
                             if !self.entries.is_empty() {
                                 self.state = State::ViewDiff;
                                 self.output.set(String::new());
@@ -194,7 +194,7 @@ impl ModeTrait for Mode {
         match self.state {
             State::Idle | State::Waiting => (
                 "revision details",
-                "[d]diff",
+                "[enter]diff",
                 "[tab]full message [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
             State::ViewDiff => ("diff", "", "[arrows]move"),

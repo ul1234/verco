@@ -322,9 +322,11 @@ impl Backend for Git {
         Ok(())
     }
 
-    fn stash_list(&self) -> BackendResult<()> {
-        Process::spawn("git", &["stash", "list"])?.wait()?;
-        Ok(())
+    fn stash_list(&self) -> BackendResult<Vec<String>> {
+        let output = Process::spawn("git", &["stash", "list"])?.wait()?;
+        //let mut splits = output.split('\0').map(str::trim);
+        let list = output.split('\0').map(str::trim).map(|s| s.to_owned()).collect::<Vec<_>>();
+        Ok(list)
     }
 
     fn reset(&self, revision: &str) -> BackendResult<()> {

@@ -107,71 +107,54 @@ impl Drawer {
         right_help: &str,
         spinner: u8,
     ) {
-        const ALL_MODES: &[(&str, u8)] = &[
-            ("status", b's'),
-            ("log", b'l'),
-            ("branches", b'b'),
-            ("tags", b't'),
-        ];
-        fn mode_tabs_len(tabs: &[(&str, u8)]) -> usize {
-            let mut len = 0;
-            for (name, _) in tabs {
-                len += "[x]".len() + name.len() + 1;
-            }
-            len
-        }
-
         let background_color = Color::Black;
         let foreground_color = Color::DarkYellow;
 
+        let set_color = |buf: &mut Vec<u8>| {
+            set_background_color(buf, background_color);
+            set_foreground_color(buf, foreground_color);
+        };
+
+        let toggle_color = |buf: &mut Vec<u8>| {
+            set_background_color(buf, foreground_color);
+            set_foreground_color(buf, background_color);
+        };
+
         move_cursor_to_zero(&mut self.buf);
 
-        set_background_color(&mut self.buf, background_color);
-        set_foreground_color(&mut self.buf, foreground_color);
+        set_color(&mut self.buf);
         self.buf.push(b' ');
         self.buf.push(spinner);
         self.buf.push(b' ');
 
-        set_background_color(&mut self.buf, foreground_color);
-        set_foreground_color(&mut self.buf, background_color);
+        toggle_color(&mut self.buf);
         self.buf.push(b' ');
         self.buf.extend_from_slice(current_mode_name.as_bytes());
         self.buf.push(b' ');
 
-        set_background_color(&mut self.buf, background_color);
-        set_foreground_color(&mut self.buf, foreground_color);
-
-        let (modes_before, modes_after) =
-            match ALL_MODES.iter().position(|&(m, _)| m == current_mode_name) {
-                Some(i) => (&ALL_MODES[..i], &ALL_MODES[i + 1..]),
-                None => (ALL_MODES, &[][..]),
-            };
-        let modes_before_len = mode_tabs_len(modes_before);
-        let modes_after_len = mode_tabs_len(modes_after);
+        let header_help = "[s]status [l]log [b]branches [t]tags [ctrl+s]stash";
+        let mut header_help = header_help.as_bytes();
         let current_mode_len = 3 + 1 + current_mode_name.len() + 1;
+        let available_width = self.viewport_size.0.saturating_sub(1) as usize;
 
-        let spacer_len = (self.viewport_size.0 as usize)
-            .saturating_sub(modes_before_len + modes_after_len + current_mode_len);
-        self.buf.extend(std::iter::repeat(b' ').take(spacer_len));
-
-        for &(mode_name, shortcut) in modes_before.iter().chain(modes_after) {
-            self.buf.push(b'[');
-            self.buf.push(shortcut);
-            self.buf.push(b']');
-            self.buf.extend_from_slice(mode_name.as_bytes());
-            self.buf.push(b' ');
+        if current_mode_len + header_help.len() > available_width {
+            let overflow_len = current_mode_len + header_help.len() - available_width;
+            header_help = &header_help[..header_help.len() - overflow_len];
         }
 
-        clear_until_new_line(&mut self.buf);
-        move_cursor_to_next_line(&mut self.buf);
+        let spacer_len = available_width - current_mode_len - header_help.len();
 
-        set_background_color(&mut self.buf, foreground_color);
-        set_foreground_color(&mut self.buf, background_color);
+        set_color(&mut self.buf);
+        self.buf.extend(std::iter::repeat(b' ').take(spacer_len));
+        self.buf.extend_from_slice(header_help);
+
+        self.next_line();
+
+        toggle_color(&mut self.buf);
 
         let mut left_help = left_help.as_bytes();
         let mut right_help = right_help.as_bytes();
 
-        let available_width = self.viewport_size.0.saturating_sub(1) as usize;
         if left_help.len() > available_width {
             left_help = &left_help[..available_width];
             right_help = &[];
