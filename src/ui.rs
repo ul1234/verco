@@ -132,7 +132,7 @@ impl Drawer {
         self.buf.extend_from_slice(current_mode_name.as_bytes());
         self.buf.push(b' ');
 
-        let header_help = "[s]status [l]log [b]branches [t]tags [ctrl+s]stash";
+        let header_help = "[s]status [l]log [b]branches [t]tags [S]stash";
         let mut header_help = header_help.as_bytes();
         let current_mode_len = 3 + 1 + current_mode_name.len() + 1;
         let available_width = self.viewport_size.0.saturating_sub(1) as usize;

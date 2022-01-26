@@ -105,7 +105,7 @@ impl Application {
                 Key::Char('l') => self.enter_mode(ctx, ModeKind::Log),
                 Key::Char('b') => self.enter_mode(ctx, ModeKind::Branches),
                 Key::Char('t') => self.enter_mode(ctx, ModeKind::Tags),
-                Key::Ctrl('s') => self.enter_mode(ctx, ModeKind::Stash),
+                Key::Char('S') => self.enter_mode(ctx, ModeKind::Stash),
                 _ => (),
             }
         }

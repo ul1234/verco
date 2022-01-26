@@ -12,22 +12,18 @@ use crate::{
 
 pub enum Response {
     Refresh(Vec<String>),
-    Commit,
     Diff(String),
 }
 
 enum WaitOperation {
     Refresh,
-    Commit,
     Discard,
-    ResolveTakingOurs,
-    ResolveTakingTheirs,
+    Pop,
 }
 
 enum State {
     Idle,
     Waiting(WaitOperation),
-    CommitMessageInput,
     ViewDiff,
 }
 impl Default for State {
@@ -97,27 +93,68 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
-        unimplemented!()
+        let pending_input = false;
+        ModeStatus { pending_input }
     }
 
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Stash).unwrap();
         match response {
-            //Response::Refresh(info) =>
+            Response::Refresh(info) => {
+                let s = info.into_iter().collect();
+                self.output.set(s);
+
+                if let State::Waiting(_) = self.state {
+                    self.state = State::Idle;
+                }
+                if let State::Idle = self.state {
+                }
+
+                self.filter.filter(self.entries.iter());
+                self.select
+                    .saturate_cursor(self.filter.visible_indices().len());
+            }
             _ => unimplemented!(),
         }
     }
 
     fn is_waiting_response(&self) -> bool {
-        unimplemented!()
+        match self.state {
+            State::Idle => false,
+            State::Waiting(_) => true,
+            State::ViewDiff => self.output.text().is_empty(),
+        }
     }
 
     fn header(&self) -> (&str, &str, &str) {
-        unimplemented!()
+        let name = match self.state {
+            State::Idle | State::Waiting(WaitOperation::Refresh) => "stash list",
+            State::Waiting(WaitOperation::Discard) => "discard",
+            State::Waiting(WaitOperation::Pop) => "pop",
+            State::ViewDiff => "diff",
+        };
+
+        let left_help =
+            "[p]pop [enter]details [d]discard";
+        let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
+        (name, left_help, right_help)
     }
 
     fn draw(&self, drawer: &mut Drawer) {
-        unimplemented!()
+        let filter_line_count = drawer.filter(&self.filter);
+        if self.output.text().is_empty() {
+            drawer.select_menu(
+                &self.select,
+                filter_line_count,
+                false,
+                self.filter
+                    .visible_indices()
+                    .iter()
+                    .map(|&i| &self.entries[i]),
+            );
+        } else {
+            drawer.output(&self.output);
+        }
     }
 }
 
@@ -133,8 +170,6 @@ where
             Ok(info) => info,
             Err(error) => vec![error],
         };
-        // info.entries
-        //     .sort_unstable_by(|a, b| a.status.cmp(&b.status));
 
         ctx.event_sender
             .send_response(ModeResponse::Stash(Response::Refresh(info)));

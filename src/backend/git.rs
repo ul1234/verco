@@ -307,11 +307,11 @@ impl Backend for Git {
         Ok(())
     }
 
-    fn stash(&self, entries: &[RevisionEntry]) -> BackendResult<()> {
+    fn stash(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()> {
         if entries.is_empty() {
-            Process::spawn("git", &["stash"])?.wait()?;
+            Process::spawn("git", &["stash", "save", message])?.wait()?;
         } else {
-            let mut args = vec!["stash", "--"];
+            let mut args = vec!["stash", "save", message, "--"];
             for entry in entries {
                 args.push(&entry.name);
             }
@@ -325,7 +325,11 @@ impl Backend for Git {
     fn stash_list(&self) -> BackendResult<Vec<String>> {
         let output = Process::spawn("git", &["stash", "list"])?.wait()?;
         //let mut splits = output.split('\0').map(str::trim);
-        let list = output.split('\0').map(str::trim).map(|s| s.to_owned()).collect::<Vec<_>>();
+        let list = output
+            .split('\0')
+            .map(str::trim)
+            .map(|s| s.to_owned())
+            .collect::<Vec<_>>();
         Ok(list)
     }
 

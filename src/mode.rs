@@ -137,7 +137,7 @@ impl ReadLine {
                     self.input.truncate(len);
                 }
             }
-            Key::Backspace | Key::Ctrl('h') => {
+            Key::Backspace => {
                 if let Some((last_char_index, _)) = self.input.char_indices().next_back() {
                     self.input.truncate(last_char_index);
                 }

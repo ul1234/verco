@@ -20,6 +20,7 @@ enum WaitOperation {
     Refresh,
     Commit,
     Discard,
+    Stash,
     ResolveTakingOurs,
     ResolveTakingTheirs,
 }
@@ -28,6 +29,7 @@ enum State {
     Idle,
     Waiting(WaitOperation),
     CommitMessageInput,
+    StashMessageInput,
     ViewDiff,
 }
 impl Default for State {
@@ -124,7 +126,7 @@ impl ModeTrait for Mode {
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
         let pending_input =
-            matches!(self.state, State::CommitMessageInput) || self.filter.has_focus();
+            matches!(self.state, State::CommitMessageInput | State::StashMessageInput) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
         if self.filter.has_focus() {
@@ -199,9 +201,10 @@ impl ModeTrait for Mode {
                         }
                         Key::Ctrl('s') => {
                             if !self.entries.is_empty() {
-                                let entries = self.get_selected_entries();
-
-                                request(ctx, move |b| b.stash(&entries));
+                                self.state = State::StashMessageInput;
+                                self.output.set(String::new());
+                                self.filter.clear();
+                                self.readline.clear();
                             }
                         }
                         Key::Enter => {
@@ -257,6 +260,20 @@ impl ModeTrait for Mode {
                         self.on_enter(ctx, "");
                     }
                 }
+                State::StashMessageInput => {
+                    self.readline.on_key(key);
+                    if key.is_submit() {
+                        self.state = State::Waiting(WaitOperation::Stash);
+
+                        let message = self.readline.input().to_string();
+                        let entries = self.get_selected_entries();
+                        self.remove_selected_entries();
+
+                        request(ctx, move |b| b.stash(&message, &entries));
+                    } else if key.is_cancel() {
+                        self.on_enter(ctx, "");
+                    }
+                }
                 _ => self.output.on_key(available_height, key),
             }
         }
@@ -295,7 +312,7 @@ impl ModeTrait for Mode {
 
     fn is_waiting_response(&self) -> bool {
         match self.state {
-            State::Idle | State::CommitMessageInput => false,
+            State::Idle | State::CommitMessageInput | State::StashMessageInput => false,
             State::Waiting(_) => true,
             State::ViewDiff => self.output.text().is_empty(),
         }
@@ -305,7 +322,9 @@ impl ModeTrait for Mode {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "status",
             State::CommitMessageInput => "commit message",
+            State::StashMessageInput => "stash message",
             State::Waiting(WaitOperation::Commit) => "commit",
+            State::Waiting(WaitOperation::Stash) => "stash",
             State::Waiting(WaitOperation::Discard) => "discard",
             State::Waiting(WaitOperation::ResolveTakingOurs) => "resolve taking ours",
             State::Waiting(WaitOperation::ResolveTakingTheirs) => "resolve taking theirs",
@@ -316,9 +335,9 @@ impl ModeTrait for Mode {
                 "[c]commit [R]revert [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
                 "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
-            State::CommitMessageInput => (
+            State::CommitMessageInput | State::StashMessageInput => (
                 "",
-                "[enter]submit [esc]cancel [ctrl+w]delete word [ctrl+u]delete all",
+                "[enter]submit [esc]cancel [ctrl+w]delete word [Home]delete all",
             ),
             State::ViewDiff => ("", "[arrows]move"),
         };
@@ -365,6 +384,9 @@ impl ModeTrait for Mode {
             }
             State::CommitMessageInput => {
                 drawer.readline(&self.readline, "type in the commit message...")
+            }
+            State::StashMessageInput => {
+                drawer.readline(&self.readline, "type in the stash message...")
             }
             State::ViewDiff => {
                 drawer.diff(&self.output);

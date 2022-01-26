@@ -137,7 +137,7 @@ pub trait Backend: 'static + Send + Sync {
     fn push(&self) -> BackendResult<()>;
     fn push_gerrit(&self) -> BackendResult<()>;
     fn reset(&self, revision: &str) -> BackendResult<()>;
-    fn stash(&self, entries: &[RevisionEntry]) -> BackendResult<()>;
+    fn stash(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()>;
     fn stash_list(&self) -> BackendResult<Vec<String>>;
 
     fn revision_details(&self, revision: &str) -> BackendResult<RevisionInfo>;
