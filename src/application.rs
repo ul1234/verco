@@ -96,7 +96,7 @@ impl Application {
         let status = self.current_mode().on_key(ctx, key, &revision);
 
         if !status.pending_input {
-            if key.is_cancel() {
+            if key.is_exit() {
                 return false;
             }
 

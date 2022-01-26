@@ -107,8 +107,7 @@ impl ModeTrait for Mode {
                 if let State::Waiting(_) = self.state {
                     self.state = State::Idle;
                 }
-                if let State::Idle = self.state {
-                }
+                if let State::Idle = self.state {}
 
                 self.filter.filter(self.entries.iter());
                 self.select
@@ -134,8 +133,7 @@ impl ModeTrait for Mode {
             State::ViewDiff => "diff",
         };
 
-        let left_help =
-            "[p]pop [enter]details [d]discard";
+        let left_help = "[p]pop [enter]details [d]discard";
         let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
         (name, left_help, right_help)
     }

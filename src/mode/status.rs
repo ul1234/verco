@@ -125,8 +125,10 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
-        let pending_input =
-            matches!(self.state, State::CommitMessageInput | State::StashMessageInput) || self.filter.has_focus();
+        let pending_input = matches!(
+            self.state,
+            State::CommitMessageInput | State::StashMessageInput
+        ) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
         if self.filter.has_focus() {

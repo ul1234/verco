@@ -53,7 +53,11 @@ impl Key {
     }
 
     pub fn is_cancel(&self) -> bool {
-        matches!(self, Self::Esc | Self::Ctrl('c'))
+        matches!(self, Self::Esc)
+    }
+
+    pub fn is_exit(&self) -> bool {
+        matches!(self, Self::Ctrl('c'))
     }
 }
 
