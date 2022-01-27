@@ -59,6 +59,12 @@ pub struct Output {
     scroll: usize,
 }
 impl Output {
+    pub fn new(text: String) -> Self {
+        let mut output = Output::default();
+        output.set(text);
+        output
+    }
+
     pub fn set(&mut self, output: String) {
         self.text = output;
         self.line_count = self.text.lines().count();

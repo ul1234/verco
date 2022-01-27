@@ -354,6 +354,11 @@ impl Backend for Git {
         Ok(entries)
     }
 
+    fn stash_pop(&self, id: usize) -> BackendResult<()> {
+        Process::spawn("git", &["stash", "pop", id.to_string().as_str()])?.wait()?;
+        Ok(())
+    }
+
     fn reset(&self, revision: &str) -> BackendResult<()> {
         let revision = if revision == "" {
             self.remote_branch()?

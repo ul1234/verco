@@ -150,6 +150,7 @@ pub trait Backend: 'static + Send + Sync {
     fn reset(&self, revision: &str) -> BackendResult<()>;
     fn stash(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()>;
     fn stash_list(&self) -> BackendResult<Vec<StashEntry>>;
+    fn stash_pop(&self, id: usize) -> BackendResult<()>;
 
     fn revision_details(&self, revision: &str) -> BackendResult<RevisionInfo>;
 

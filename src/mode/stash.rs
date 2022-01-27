@@ -111,6 +111,24 @@ impl ModeTrait for Mode {
                                 unimplemented!()
                             }
                         }
+                        Key::Char('p') => {
+                            if let Some(current_entry_index) = current_entry_index {
+                                let entry = &self.entries[current_entry_index];
+                                let id = entry.id;
+
+                                let ctx = ctx.clone();
+
+                                thread::spawn(move || match ctx.backend.stash_pop(id) {
+                                    Ok(()) => {
+                                        ctx.event_sender.send_mode_change(ModeKind::Status);
+                                        ctx.event_sender.send_mode_refresh(ModeKind::Status);
+                                    }
+                                    Err(error) => ctx.event_sender.send_response(
+                                        ModeResponse::Stash(Response::Refresh(Err(error))),
+                                    ),
+                                });
+                            }
+                        }
                         _ => (),
                     }
                 }
@@ -172,15 +190,20 @@ impl ModeTrait for Mode {
         match self.state {
             State::Idle | State::Waiting(_) => {
                 if self.output.text.is_empty() {
-                    drawer.select_menu(
-                        &self.select,
-                        filter_line_count,
-                        false,
-                        self.filter
-                            .visible_indices()
-                            .iter()
-                            .map(|&i| &self.entries[i]),
-                    );
+                    if self.entries.is_empty() {
+                        drawer.output(&Output::new("No Stashes!".to_owned()));
+                    }
+                    else {
+                        drawer.select_menu(
+                            &self.select,
+                            filter_line_count,
+                            false,
+                            self.filter
+                                .visible_indices()
+                                .iter()
+                                .map(|&i| &self.entries[i]),
+                        );
+                    }
                 } else {
                     drawer.output(&self.output);
                 }
