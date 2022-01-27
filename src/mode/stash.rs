@@ -1,7 +1,7 @@
 use std::thread;
 
 use crate::{
-    backend::{Backend, BackendResult, FileStatus, RevisionEntry, StatusInfo},
+    backend::{Backend, BackendResult, FileStatus, StashEntry, StatusInfo},
     mode::{
         Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine,
         SelectMenu, SelectMenuAction,
@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub enum Response {
-    Refresh(Vec<String>),
+    Refresh(BackendResult<Vec<StashEntry>>),
     Diff(String),
 }
 
@@ -32,48 +32,36 @@ impl Default for State {
     }
 }
 
+impl SelectEntryDraw for StashEntry {
+    fn draw(&self, drawer: &mut Drawer, hovered: bool, _: bool) -> usize {
+        fn color(color: Color, hovered: bool) -> Color {
+            if hovered {
+                Color::White
+            } else {
+                color
+            }
+        }
+
+        drawer.fmt(format_args!(
+            "{}[{}] {}{} {}{}",
+            color(Color::DarkYellow, hovered),
+            self.id,
+            color(Color::DarkGreen, hovered),
+            &self.branch,
+            color(Color::White, hovered),
+            &self.message
+        ));
+        1
+    }
+}
 #[derive(Default)]
 pub struct Mode {
     state: State,
-    entries: Vec<RevisionEntry>,
+    entries: Vec<StashEntry>,
     output: Output,
     select: SelectMenu,
     filter: Filter,
     readline: ReadLine,
-}
-
-impl Mode {
-    fn get_selected_entries(&self) -> Vec<RevisionEntry> {
-        let entries: Vec<_> = self
-            .entries
-            .iter()
-            .filter(|&e| e.selected)
-            .cloned()
-            .collect();
-        entries
-    }
-
-    fn remove_selected_entries(&mut self) {
-        let previous_len = self.entries.len();
-
-        for i in (0..self.entries.len()).rev() {
-            if self.entries[i].selected {
-                self.entries.remove(i);
-                self.filter.on_remove_entry(i);
-                let i = match self.filter.visible_indices().binary_search(&i) {
-                    Ok(i) => i,
-                    Err(i) => i,
-                };
-                self.select.on_remove_entry(i);
-            }
-        }
-
-        if self.entries.len() == previous_len {
-            self.entries.clear();
-            self.select.cursor = 0;
-            self.filter.clear();
-        }
-    }
 }
 
 impl ModeTrait for Mode {
@@ -93,21 +81,62 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
-        let pending_input = false;
+        let pending_input = self.filter.has_focus();
+        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
+
+        if self.filter.has_focus() {
+            self.filter.on_key(key);
+            self.filter.filter(self.entries.iter());
+            self.select
+                .saturate_cursor(self.filter.visible_indices().len());
+        } else {
+            match self.state {
+                State::Idle | State::Waiting(_) => {
+                    if self.output.text().is_empty() {
+                        self.select.on_key(
+                            self.filter.visible_indices().len(),
+                            available_height,
+                            key,
+                        );
+                    } else {
+                        self.output.on_key(available_height, key);
+                    }
+
+                    let current_entry_index = self.filter.get_visible_index(self.select.cursor);
+                    match key {
+                        Key::Ctrl('f') => self.filter.enter(),
+                        Key::Enter => {
+                            if let Some(current_entry_index) = current_entry_index {
+                                let _entry = &self.entries[current_entry_index];
+                                unimplemented!()
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                _ => unimplemented!(),
+            }
+        }
+
         ModeStatus { pending_input }
     }
 
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Stash).unwrap();
         match response {
-            Response::Refresh(info) => {
-                let s = info.into_iter().collect();
-                self.output.set(s);
+            Response::Refresh(result) => {
+                self.entries = Vec::new();
+                self.output.set(String::new());
 
                 if let State::Waiting(_) = self.state {
                     self.state = State::Idle;
                 }
-                if let State::Idle = self.state {}
+                if let State::Idle = self.state {
+                    match result {
+                        Ok(entries) => self.entries = entries,
+                        Err(error) => self.output.set(error),
+                    }
+                }
 
                 self.filter.filter(self.entries.iter());
                 self.select
@@ -140,18 +169,23 @@ impl ModeTrait for Mode {
 
     fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
-        if self.output.text().is_empty() {
-            drawer.select_menu(
-                &self.select,
-                filter_line_count,
-                false,
-                self.filter
-                    .visible_indices()
-                    .iter()
-                    .map(|&i| &self.entries[i]),
-            );
-        } else {
-            drawer.output(&self.output);
+        match self.state {
+            State::Idle | State::Waiting(_) => {
+                if self.output.text.is_empty() {
+                    drawer.select_menu(
+                        &self.select,
+                        filter_line_count,
+                        false,
+                        self.filter
+                            .visible_indices()
+                            .iter()
+                            .map(|&i| &self.entries[i]),
+                    );
+                } else {
+                    drawer.output(&self.output);
+                }
+            }
+            _ => unimplemented!(),
         }
     }
 }
@@ -164,12 +198,9 @@ where
     thread::spawn(move || {
         use std::ops::Deref;
 
-        let info = match f(ctx.backend.deref()).and_then(|_| ctx.backend.stash_list()) {
-            Ok(info) => info,
-            Err(error) => vec![error],
-        };
+        let result = f(ctx.backend.deref()).and_then(|_| ctx.backend.stash_list());
 
         ctx.event_sender
-            .send_response(ModeResponse::Stash(Response::Refresh(info)));
+            .send_response(ModeResponse::Stash(Response::Refresh(result)));
     });
 }

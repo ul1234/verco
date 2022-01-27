@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use super::{
     Backend, BackendResult, BranchEntry, FileStatus, LogEntry, Process, RevisionEntry,
-    RevisionInfo, StatusInfo, TagEntry,
+    RevisionInfo, StashEntry, StatusInfo, TagEntry,
 };
 
 pub struct Git;
@@ -322,15 +322,36 @@ impl Backend for Git {
         Ok(())
     }
 
-    fn stash_list(&self) -> BackendResult<Vec<String>> {
-        let output = Process::spawn("git", &["stash", "list"])?.wait()?;
-        //let mut splits = output.split('\0').map(str::trim);
-        let list = output
-            .split('\0')
-            .map(str::trim)
-            .map(|s| s.to_owned())
-            .collect::<Vec<_>>();
-        Ok(list)
+    fn stash_list(&self) -> BackendResult<Vec<StashEntry>> {
+        let entries = Process::spawn("git", &["stash", "list"])?
+            .wait()?
+            .lines()
+            .map(|l| {
+                let mut splits = l.splitn(3, ':');
+                let id = splits
+                    .next()
+                    .unwrap()
+                    .trim_matches(|c: char| !c.is_numeric())
+                    .parse::<usize>()
+                    .unwrap();
+                let branch = splits
+                    .next()
+                    .unwrap()
+                    .split(' ')
+                    .next_back()
+                    .unwrap()
+                    .trim()
+                    .to_owned();
+                let message = splits.next().unwrap_or("").trim().to_owned();
+
+                StashEntry {
+                    id,
+                    branch,
+                    message,
+                }
+            })
+            .collect();
+        Ok(entries)
     }
 
     fn reset(&self, revision: &str) -> BackendResult<()> {

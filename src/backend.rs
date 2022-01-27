@@ -121,6 +121,17 @@ impl FilterEntry for TagEntry {
     }
 }
 
+pub struct StashEntry {
+    pub id: usize,
+    pub branch: String,
+    pub message: String,
+}
+impl FilterEntry for StashEntry {
+    fn fuzzy_matches(&self, pattern: &str) -> bool {
+        fuzzy_matches(&self.branch, pattern) || fuzzy_matches(&self.message, pattern)
+    }
+}
+
 pub trait Backend: 'static + Send + Sync {
     fn status(&self) -> BackendResult<StatusInfo>;
     fn commit(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()>;
@@ -138,7 +149,7 @@ pub trait Backend: 'static + Send + Sync {
     fn push_gerrit(&self) -> BackendResult<()>;
     fn reset(&self, revision: &str) -> BackendResult<()>;
     fn stash(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()>;
-    fn stash_list(&self) -> BackendResult<Vec<String>>;
+    fn stash_list(&self) -> BackendResult<Vec<StashEntry>>;
 
     fn revision_details(&self, revision: &str) -> BackendResult<RevisionInfo>;
 
