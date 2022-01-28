@@ -146,6 +146,7 @@ impl ModeTrait for Mode {
                 }
                 State::ViewDetails(id) => match key {
                     Key::Enter => {
+                        self.output.set(String::new());
                         self.state = State::ViewDiff;
 
                         let ctx = ctx.clone();
@@ -217,7 +218,7 @@ impl ModeTrait for Mode {
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
                 "[p]pop [enter]details [d]discard",
-                "[tab]full message [arrows]move [ctrl+f]filter",
+                "[arrows]move [ctrl+f]filter",
             ),
             State::ViewDetails(_) => ("[enter]details", "[arrows]move"),
             State::ViewDiff => ("", "[arrows]move"),
@@ -232,7 +233,9 @@ impl ModeTrait for Mode {
             State::Idle | State::Waiting(_) => {
                 if self.output.text.is_empty() {
                     if self.entries.is_empty() {
-                        drawer.output(&Output::new("No Stashes!".to_owned()));
+                        if let State::Idle = self.state {
+                            drawer.output(&Output::new("No Stashes!".to_owned()));
+                        }
                     } else {
                         drawer.select_menu(
                             &self.select,
