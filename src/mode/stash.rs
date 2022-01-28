@@ -1,10 +1,10 @@
 use std::thread;
 
 use crate::{
-    backend::{Backend, BackendResult, FileStatus, StashEntry, StatusInfo},
+    backend::{Backend, BackendResult, StashEntry},
     mode::{
         Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine,
-        SelectMenu, SelectMenuAction,
+        SelectMenu,
     },
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
@@ -12,6 +12,7 @@ use crate::{
 
 pub enum Response {
     Refresh(BackendResult<Vec<StashEntry>>),
+    Details(String),
     Diff(String),
 }
 
@@ -24,6 +25,7 @@ enum WaitOperation {
 enum State {
     Idle,
     Waiting(WaitOperation),
+    ViewDetails(usize),
     ViewDiff,
 }
 impl Default for State {
@@ -107,15 +109,25 @@ impl ModeTrait for Mode {
                         Key::Ctrl('f') => self.filter.enter(),
                         Key::Enter => {
                             if let Some(current_entry_index) = current_entry_index {
-                                let _entry = &self.entries[current_entry_index];
-                                unimplemented!()
+                                let entry = &self.entries[current_entry_index];
+                                let id = entry.id;
+                                self.state = State::ViewDetails(id);
+
+                                let ctx = ctx.clone();
+                                thread::spawn(move || match ctx.backend.stash_show(id) {
+                                    Ok(info) => ctx.event_sender.send_response(
+                                        ModeResponse::Stash(Response::Details(info)),
+                                    ),
+                                    Err(error) => ctx.event_sender.send_response(
+                                        ModeResponse::Stash(Response::Refresh(Err(error))),
+                                    ),
+                                });
                             }
                         }
                         Key::Char('p') => {
                             if let Some(current_entry_index) = current_entry_index {
                                 let entry = &self.entries[current_entry_index];
                                 let id = entry.id;
-
                                 let ctx = ctx.clone();
 
                                 thread::spawn(move || match ctx.backend.stash_pop(id) {
@@ -132,7 +144,23 @@ impl ModeTrait for Mode {
                         _ => (),
                     }
                 }
-                _ => unimplemented!(),
+                State::ViewDetails(id) => match key {
+                    Key::Enter => {
+                        self.state = State::ViewDiff;
+
+                        let ctx = ctx.clone();
+                        thread::spawn(move || match ctx.backend.stash_diff(id) {
+                            Ok(info) => ctx
+                                .event_sender
+                                .send_response(ModeResponse::Stash(Response::Diff(info))),
+                            Err(error) => ctx
+                                .event_sender
+                                .send_response(ModeResponse::Stash(Response::Refresh(Err(error)))),
+                        });
+                    }
+                    _ => self.output.on_key(available_height, key),
+                },
+                State::ViewDiff => self.output.on_key(available_height, key),
             }
         }
 
@@ -160,7 +188,12 @@ impl ModeTrait for Mode {
                 self.select
                     .saturate_cursor(self.filter.visible_indices().len());
             }
-            _ => unimplemented!(),
+            Response::Details(mut info) | Response::Diff(mut info) => {
+                if info.is_empty() {
+                    info.push('\n');
+                }
+                self.output.set(info);
+            }
         }
     }
 
@@ -168,7 +201,7 @@ impl ModeTrait for Mode {
         match self.state {
             State::Idle => false,
             State::Waiting(_) => true,
-            State::ViewDiff => self.output.text().is_empty(),
+            State::ViewDetails(_) | State::ViewDiff => self.output.text().is_empty(),
         }
     }
 
@@ -177,11 +210,19 @@ impl ModeTrait for Mode {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "stash list",
             State::Waiting(WaitOperation::Discard) => "discard",
             State::Waiting(WaitOperation::Pop) => "pop",
+            State::ViewDetails(_) => "stash details",
             State::ViewDiff => "diff",
         };
 
-        let left_help = "[p]pop [enter]details [d]discard";
-        let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
+        let (left_help, right_help) = match self.state {
+            State::Idle | State::Waiting(_) => (
+                "[p]pop [enter]details [d]discard",
+                "[tab]full message [arrows]move [ctrl+f]filter",
+            ),
+            State::ViewDetails(_) => ("[enter]details", "[arrows]move"),
+            State::ViewDiff => ("", "[arrows]move"),
+        };
+
         (name, left_help, right_help)
     }
 
@@ -192,8 +233,7 @@ impl ModeTrait for Mode {
                 if self.output.text.is_empty() {
                     if self.entries.is_empty() {
                         drawer.output(&Output::new("No Stashes!".to_owned()));
-                    }
-                    else {
+                    } else {
                         drawer.select_menu(
                             &self.select,
                             filter_line_count,
@@ -208,7 +248,12 @@ impl ModeTrait for Mode {
                     drawer.output(&self.output);
                 }
             }
-            _ => unimplemented!(),
+            State::ViewDetails(_) => {
+                drawer.stash_details(&self.output);
+            }
+            State::ViewDiff => {
+                drawer.diff(&self.output);
+            }
         }
     }
 }

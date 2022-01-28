@@ -19,8 +19,8 @@ pub enum FileStatus {
     Untracked,
     Copied,
     Unmerged,
-    Missing,
-    Ignored,
+    _Missing,
+    _Ignored,
     Clean,
     Unknown(String),
 }
@@ -38,8 +38,8 @@ impl FileStatus {
             Self::Untracked => "untracked",
             Self::Copied => "copied",
             Self::Unmerged => "unmerged",
-            Self::Missing => "missing",
-            Self::Ignored => "ignored",
+            Self::_Missing => "missing",
+            Self::_Ignored => "ignored",
             Self::Clean => "clean",
             Self::Unknown(status) => {
                 if status.len() > Self::max_len() {
@@ -151,6 +151,8 @@ pub trait Backend: 'static + Send + Sync {
     fn stash(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()>;
     fn stash_list(&self) -> BackendResult<Vec<StashEntry>>;
     fn stash_pop(&self, id: usize) -> BackendResult<()>;
+    fn stash_show(&self, id: usize) -> BackendResult<String>;
+    fn stash_diff(&self, id: usize) -> BackendResult<String>;
 
     fn revision_details(&self, revision: &str) -> BackendResult<RevisionInfo>;
 

@@ -188,6 +188,61 @@ impl Drawer {
         move_cursor_to_next_line(&mut self.buf);
     }
 
+    pub fn stash_details(&mut self, output: &Output) -> usize {
+        let tab_bytes = [b' '; 4];
+        let mut utf8_buf = [0; 4];
+
+        set_background_color(&mut self.buf, Color::Black);
+
+        let mut foreground_color = Color::White;
+        let mut line_count = 0;
+        for line in output.lines_from_scroll() {
+            let mut x = 0;
+
+            for c in line.chars() {
+                let new_foreground_color = match c {
+                    '+' => Color::DarkGreen,
+                    '-' => Color::DarkRed,
+                    _ => Color::White,
+                };
+                if std::mem::discriminant(&new_foreground_color)
+                    != std::mem::discriminant(&foreground_color)
+                {
+                    foreground_color = new_foreground_color;
+                    set_foreground_color(&mut self.buf, foreground_color);
+                }
+
+                match c {
+                    '\t' => {
+                        self.buf.extend_from_slice(&tab_bytes);
+                        x += tab_bytes.len();
+                    }
+                    _ => {
+                        let bytes = c.encode_utf8(&mut utf8_buf).as_bytes();
+                        self.buf.extend_from_slice(bytes);
+                        x += 1;
+                    }
+                }
+
+                if x >= self.viewport_size.0 as _ {
+                    x -= self.viewport_size.0 as usize;
+                    line_count += 1;
+                }
+            }
+
+            self.next_line();
+
+            line_count += 1;
+            if line_count + 1 >= self.viewport_size.1 as _ {
+                break;
+            }
+        }
+
+        set_foreground_color(&mut self.buf, Color::White);
+
+        line_count
+    }
+
     pub fn diff(&mut self, output: &Output) -> usize {
         let tab_bytes = [b' '; 4];
         let mut utf8_buf = [0; 4];

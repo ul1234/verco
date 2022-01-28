@@ -140,7 +140,7 @@ impl Backend for Git {
     fn diff(&self, revision: Option<&str>, entries: &[RevisionEntry]) -> BackendResult<String> {
         match revision {
             Some(revision) => {
-                let parent = format!("{}^@", revision);
+                let parent = format!("{}~", revision);
                 if entries.is_empty() {
                     Process::spawn("git", &["diff", &parent, revision])?.wait()
                 } else {
@@ -357,6 +357,14 @@ impl Backend for Git {
     fn stash_pop(&self, id: usize) -> BackendResult<()> {
         Process::spawn("git", &["stash", "pop", id.to_string().as_str()])?.wait()?;
         Ok(())
+    }
+
+    fn stash_show(&self, id: usize) -> BackendResult<String> {
+        Process::spawn("git", &["stash", "show", id.to_string().as_str()])?.wait()
+    }
+
+    fn stash_diff(&self, id: usize) -> BackendResult<String> {
+        Process::spawn("git", &["stash", "show", "-p", id.to_string().as_str()])?.wait()
     }
 
     fn reset(&self, revision: &str) -> BackendResult<()> {
