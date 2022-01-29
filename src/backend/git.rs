@@ -368,6 +368,10 @@ impl Backend for Git {
     }
 
     fn reset(&self, revision: &str) -> BackendResult<()> {
+        let output = Process::spawn("git", &["status", "--null"])?.wait()?;
+        if !output.is_empty() {
+            return Err("There are local changes! Please stash / commit / discard first.".to_owned());
+        }
         let revision = if revision == "" {
             self.remote_branch()?
         } else {
