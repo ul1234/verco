@@ -63,7 +63,6 @@ pub struct Mode {
     output: Output,
     select: SelectMenu,
     filter: Filter,
-    readline: ReadLine,
 }
 
 impl ModeTrait for Mode {
@@ -77,7 +76,6 @@ impl ModeTrait for Mode {
         self.filter.filter(self.entries.iter());
         self.select
             .saturate_cursor(self.filter.visible_indices().len());
-        self.readline.clear();
 
         request(ctx, |_| Ok(()));
     }
