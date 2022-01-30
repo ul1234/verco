@@ -2,10 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{RevisionEntry, RevisionInfo},
-    mode::{
-        Filter, ModeContext, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu,
-        SelectMenuAction,
-    },
+    mode::{Filter, ModeContext, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu, SelectMenuAction},
     platform::Key,
     ui::{Drawer, RESERVED_LINES_COUNT},
 };
@@ -37,11 +34,7 @@ pub struct Mode {
 }
 impl Mode {
     fn get_selected_entries(&self) -> Vec<RevisionEntry> {
-        self.entries
-            .iter()
-            .filter(|&e| e.selected)
-            .cloned()
-            .collect()
+        self.entries.iter().filter(|&e| e.selected).cloned().collect()
     }
 }
 
@@ -62,16 +55,11 @@ impl ModeTrait for Mode {
         thread::spawn(move || {
             let mut info = match ctx.backend.revision_details(&revision) {
                 Ok(info) => info,
-                Err(error) => RevisionInfo {
-                    message: error,
-                    entries: Vec::new(),
-                },
+                Err(error) => RevisionInfo { message: error, entries: Vec::new() },
             };
-            info.entries
-                .sort_unstable_by(|a, b| a.status.cmp(&b.status));
+            info.entries.sort_unstable_by(|a, b| a.status.cmp(&b.status));
 
-            ctx.event_sender
-                .send_response(ModeResponse::RevisionDetails(Response::Info(info)));
+            ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Info(info)));
         });
     }
 
@@ -82,16 +70,11 @@ impl ModeTrait for Mode {
         if self.filter.has_focus() {
             self.filter.on_key(key);
             self.filter.filter(self.entries.iter());
-            self.select
-                .saturate_cursor(self.filter.visible_indices().len());
+            self.select.saturate_cursor(self.filter.visible_indices().len());
         } else {
             match self.state {
                 State::Idle => {
-                    let line_count = if self.show_full_message {
-                        self.output.line_count()
-                    } else {
-                        1
-                    };
+                    let line_count = if self.show_full_message { self.output.line_count() } else { 1 };
 
                     match self.select.on_key(
                         self.filter.visible_indices().len(),
@@ -105,11 +88,7 @@ impl ModeTrait for Mode {
                             }
                         }
                         SelectMenuAction::ToggleAll => {
-                            let all_selected = self
-                                .filter
-                                .visible_indices()
-                                .iter()
-                                .all(|&i| self.entries[i].selected);
+                            let all_selected = self.filter.visible_indices().iter().all(|&i| self.entries[i].selected);
                             for &i in self.filter.visible_indices() {
                                 self.entries[i].selected = !all_selected;
                             }
@@ -136,10 +115,7 @@ impl ModeTrait for Mode {
                                         Ok(output) => output,
                                         Err(error) => error,
                                     };
-                                    ctx.event_sender
-                                        .send_response(ModeResponse::RevisionDetails(
-                                            Response::Diff(output),
-                                        ));
+                                    ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Diff(output)));
                                 });
                             }
                         }
@@ -168,8 +144,7 @@ impl ModeTrait for Mode {
                 self.entries = info.entries;
 
                 self.filter.filter(self.entries.iter());
-                self.select
-                    .saturate_cursor(self.filter.visible_indices().len());
+                self.select.saturate_cursor(self.filter.visible_indices().len());
             }
             Response::Diff(mut output) => {
                 if let State::ViewDiff = self.state {
@@ -210,10 +185,7 @@ impl ModeTrait for Mode {
             drawer.output(&self.output)
         } else {
             let output = self.output.text().lines().next().unwrap_or("");
-            let output = match output
-                .char_indices()
-                .nth(drawer.viewport_size.0.saturating_sub(1) as _)
-            {
+            let output = match output.char_indices().nth(drawer.viewport_size.0.saturating_sub(1) as _) {
                 Some((i, c)) => &output[..i + c.len_utf8()],
                 None => output,
             };
@@ -230,10 +202,7 @@ impl ModeTrait for Mode {
                 &self.select,
                 (line_count + 1).min(u16::MAX as _) as _,
                 false,
-                self.filter
-                    .visible_indices()
-                    .iter()
-                    .map(|&i| &self.entries[i]),
+                self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
             );
         }
     }

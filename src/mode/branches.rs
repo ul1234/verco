@@ -2,10 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{Backend, BackendResult, BranchEntry},
-    mode::{
-        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine,
-        SelectMenu,
-    },
+    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine, SelectMenu},
     platform::Key,
     ui::{Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -36,11 +33,7 @@ impl Default for State {
 
 impl SelectEntryDraw for BranchEntry {
     fn draw(&self, drawer: &mut Drawer, _: bool, _: bool) -> usize {
-        let status = if self.checked_out {
-            " (checked out)"
-        } else {
-            ""
-        };
+        let status = if self.checked_out { " (checked out)" } else { "" };
         drawer.fmt(format_args!("{}{}", self.name, status));
         1
     }
@@ -64,8 +57,7 @@ impl ModeTrait for Mode {
 
         self.output.set(String::new());
         self.filter.filter(self.entries.iter());
-        self.select
-            .saturate_cursor(self.filter.visible_indices().len());
+        self.select.saturate_cursor(self.filter.visible_indices().len());
         self.readline.clear();
 
         request(ctx, |_| Ok(()));
@@ -78,17 +70,12 @@ impl ModeTrait for Mode {
         if self.filter.has_focus() {
             self.filter.on_key(key);
             self.filter.filter(self.entries.iter());
-            self.select
-                .saturate_cursor(self.filter.visible_indices().len());
+            self.select.saturate_cursor(self.filter.visible_indices().len());
         } else {
             match self.state {
                 State::Idle | State::Waiting(_) => {
                     if self.output.text().is_empty() {
-                        self.select.on_key(
-                            self.filter.visible_indices().len(),
-                            available_height,
-                            key,
-                        );
+                        self.select.on_key(self.filter.visible_indices().len(), available_height, key);
                     } else {
                         self.output.on_key(available_height, key);
                     }
@@ -105,14 +92,12 @@ impl ModeTrait for Mode {
                                     ctx.event_sender.send_mode_change(ModeKind::Log);
                                     match ctx.backend.checkout(&name) {
                                         Ok(()) => {
-                                            ctx.event_sender.send_response(ModeResponse::Branches(
-                                                Response::Checkout,
-                                            ));
+                                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Checkout));
                                             ctx.event_sender.send_mode_refresh(ModeKind::Log);
                                         }
-                                        Err(error) => ctx.event_sender.send_response(
-                                            ModeResponse::Branches(Response::Refresh(Err(error))),
-                                        ),
+                                        Err(error) => ctx
+                                            .event_sender
+                                            .send_response(ModeResponse::Branches(Response::Refresh(Err(error)))),
                                     }
                                 });
                             }
@@ -149,14 +134,12 @@ impl ModeTrait for Mode {
                                     ctx.event_sender.send_mode_change(ModeKind::Log);
                                     match ctx.backend.merge(&name) {
                                         Ok(()) => {
-                                            ctx.event_sender.send_response(ModeResponse::Branches(
-                                                Response::Merge,
-                                            ));
+                                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Merge));
                                             ctx.event_sender.send_mode_refresh(ModeKind::Log);
                                         }
-                                        Err(error) => ctx.event_sender.send_response(
-                                            ModeResponse::Branches(Response::Refresh(Err(error))),
-                                        ),
+                                        Err(error) => ctx
+                                            .event_sender
+                                            .send_response(ModeResponse::Branches(Response::Refresh(Err(error)))),
                                     }
                                 });
                             }
@@ -199,8 +182,7 @@ impl ModeTrait for Mode {
                 }
 
                 self.filter.filter(self.entries.iter());
-                self.select
-                    .saturate_cursor(self.filter.visible_indices().len());
+                self.select.saturate_cursor(self.filter.visible_indices().len());
 
                 if let Some(i) = self.entries.iter().position(|e| e.checked_out) {
                     if let Ok(i) = self.filter.visible_indices().binary_search(&i) {
@@ -228,14 +210,10 @@ impl ModeTrait for Mode {
             State::NewNameInput => "new branch name",
         };
         let (left_help, right_help) = match self.state {
-            State::Idle | State::Waiting(_) => (
-                "[enter]checkout [n]new [d]delete [D]force delete [m]merge",
-                "[arrows]move [ctrl+f]filter",
-            ),
-            State::NewNameInput => (
-                "",
-                "[enter]submit [esc]cancel [ctrl+w]delete word [ctrl+u]delete all",
-            ),
+            State::Idle | State::Waiting(_) => {
+                ("[enter]checkout [n]new [d]delete [D]force delete [m]merge", "[arrows]move [ctrl+f]filter")
+            }
+            State::NewNameInput => ("", "[enter]submit [esc]cancel [ctrl+w]delete word [ctrl+u]delete all"),
         };
         (name, left_help, right_help)
     }
@@ -249,10 +227,7 @@ impl ModeTrait for Mode {
                         &self.select,
                         filter_line_count,
                         false,
-                        self.filter
-                            .visible_indices()
-                            .iter()
-                            .map(|&i| &self.entries[i]),
+                        self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
                     );
                 } else {
                     drawer.output(&self.output);
@@ -276,7 +251,6 @@ where
             entries.sort_unstable_by(|a, b| a.name.cmp(&b.name));
         }
 
-        ctx.event_sender
-            .send_response(ModeResponse::Branches(Response::Refresh(result)));
+        ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(result)));
     });
 }

@@ -59,9 +59,7 @@ fn main() {
         let mut stdout = stdout.lock();
 
         stdout.write_all(ui::BEGIN_TITLE_CODE).unwrap();
-        stdout
-            .write_all(root.as_os_str().to_string_lossy().as_bytes())
-            .unwrap();
+        stdout.write_all(root.as_os_str().to_string_lossy().as_bytes()).unwrap();
         stdout.write_all(ui::END_TITLE_CODE).unwrap();
         stdout.write_all(ui::ENTER_ALTERNATE_BUFFER_CODE).unwrap();
         stdout.write_all(ui::HIDE_CURSOR_CODE).unwrap();

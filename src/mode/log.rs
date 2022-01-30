@@ -1,8 +1,6 @@
 use crate::{
     backend::{Backend, BackendResult, LogEntry},
-    mode::{
-        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu,
-    },
+    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu},
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -142,8 +140,7 @@ impl ModeTrait for Mode {
 
         self.output.set(String::new());
         self.filter.filter(self.entries.iter());
-        self.select
-            .saturate_cursor(self.filter.visible_indices().len());
+        self.select.saturate_cursor(self.filter.visible_indices().len());
         self.show_full_hovered_message = false;
 
         request(ctx, |_| Ok(()));
@@ -157,33 +154,26 @@ impl ModeTrait for Mode {
             self.filter.on_key(key);
 
             self.filter.filter(self.entries.iter());
-            self.select
-                .saturate_cursor(self.filter.visible_indices().len());
+            self.select.saturate_cursor(self.filter.visible_indices().len());
         } else {
-            self.select
-                .on_key(self.filter.visible_indices().len(), available_height, key);
+            self.select.on_key(self.filter.visible_indices().len(), available_height, key);
 
             let current_entry_index = self.filter.get_visible_index(self.select.cursor);
-            if matches!(self.state, State::Idle)
-                && current_entry_index
-                    .map(|i| i + 1 == self.entries.len())
-                    .unwrap_or(false)
+            if matches!(self.state, State::Idle) && current_entry_index.map(|i| i + 1 == self.entries.len()).unwrap_or(false)
             {
                 self.state = State::Waiting(WaitOperation::Refresh);
                 let start = self.entries.len();
                 let ctx = ctx.clone();
                 thread::spawn(move || {
                     let result = ctx.backend.log(start, available_height);
-                    ctx.event_sender
-                        .send_response(ModeResponse::Log(Response::Refresh(result)));
+                    ctx.event_sender.send_response(ModeResponse::Log(Response::Refresh(result)));
                 });
             }
 
             if let Key::Enter = key {
                 if let Some(current_entry_index) = current_entry_index {
                     let entry = &self.entries[current_entry_index];
-                    ctx.event_sender
-                        .send_mode_change(ModeKind::RevisionDetails(entry.hash.clone()));
+                    ctx.event_sender.send_mode_change(ModeKind::RevisionDetails(entry.hash.clone()));
                 }
             } else if let Key::Tab = key {
                 self.show_full_hovered_message = !self.show_full_hovered_message;
@@ -263,8 +253,7 @@ impl ModeTrait for Mode {
                 }
 
                 self.filter.filter(self.entries.iter());
-                self.select
-                    .saturate_cursor(self.filter.visible_indices().len());
+                self.select.saturate_cursor(self.filter.visible_indices().len());
             }
         }
     }
@@ -287,8 +276,7 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::Push) => "push",
         };
 
-        let left_help =
-            "[c]checkout [enter]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
+        let left_help = "[c]checkout [enter]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
         let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
         (name, left_help, right_help)
     }
@@ -300,10 +288,7 @@ impl ModeTrait for Mode {
                 &self.select,
                 filter_line_count,
                 self.show_full_hovered_message,
-                self.filter
-                    .visible_indices()
-                    .iter()
-                    .map(|&i| &self.entries[i]),
+                self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
             );
         } else {
             drawer.output(&self.output);
@@ -322,7 +307,6 @@ where
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
         let result = f(ctx.backend.deref()).and_then(|_| ctx.backend.log(0, available_height));
         //println!("result: {:?}", result);
-        ctx.event_sender
-            .send_response(ModeResponse::Log(Response::Refresh(result)));
+        ctx.event_sender.send_response(ModeResponse::Log(Response::Refresh(result)));
     });
 }

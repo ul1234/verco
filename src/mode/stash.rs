@@ -2,9 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{Backend, BackendResult, StashEntry},
-    mode::{
-        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu,
-    },
+    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu},
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -72,8 +70,7 @@ impl ModeTrait for Mode {
 
         self.output.set(String::new());
         self.filter.filter(self.entries.iter());
-        self.select
-            .saturate_cursor(self.filter.visible_indices().len());
+        self.select.saturate_cursor(self.filter.visible_indices().len());
 
         request(ctx, |_| Ok(()));
     }
@@ -85,17 +82,12 @@ impl ModeTrait for Mode {
         if self.filter.has_focus() {
             self.filter.on_key(key);
             self.filter.filter(self.entries.iter());
-            self.select
-                .saturate_cursor(self.filter.visible_indices().len());
+            self.select.saturate_cursor(self.filter.visible_indices().len());
         } else {
             match self.state {
                 State::Idle | State::Waiting(_) => {
                     if self.output.text().is_empty() {
-                        self.select.on_key(
-                            self.filter.visible_indices().len(),
-                            available_height,
-                            key,
-                        );
+                        self.select.on_key(self.filter.visible_indices().len(), available_height, key);
                     } else {
                         self.output.on_key(available_height, key);
                     }
@@ -111,12 +103,10 @@ impl ModeTrait for Mode {
 
                                 let ctx = ctx.clone();
                                 thread::spawn(move || match ctx.backend.stash_show(id) {
-                                    Ok(info) => ctx.event_sender.send_response(
-                                        ModeResponse::Stash(Response::Details(info)),
-                                    ),
-                                    Err(error) => ctx.event_sender.send_response(
-                                        ModeResponse::Stash(Response::Refresh(Err(error))),
-                                    ),
+                                    Ok(info) => ctx.event_sender.send_response(ModeResponse::Stash(Response::Details(info))),
+                                    Err(error) => {
+                                        ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(Err(error))))
+                                    }
                                 });
                             }
                         }
@@ -131,9 +121,9 @@ impl ModeTrait for Mode {
                                         ctx.event_sender.send_mode_change(ModeKind::Status);
                                         ctx.event_sender.send_mode_refresh(ModeKind::Status);
                                     }
-                                    Err(error) => ctx.event_sender.send_response(
-                                        ModeResponse::Stash(Response::Refresh(Err(error))),
-                                    ),
+                                    Err(error) => {
+                                        ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(Err(error))))
+                                    }
                                 });
                             }
                         }
@@ -156,12 +146,8 @@ impl ModeTrait for Mode {
 
                         let ctx = ctx.clone();
                         thread::spawn(move || match ctx.backend.stash_diff(id) {
-                            Ok(info) => ctx
-                                .event_sender
-                                .send_response(ModeResponse::Stash(Response::Diff(info))),
-                            Err(error) => ctx
-                                .event_sender
-                                .send_response(ModeResponse::Stash(Response::Refresh(Err(error)))),
+                            Ok(info) => ctx.event_sender.send_response(ModeResponse::Stash(Response::Diff(info))),
+                            Err(error) => ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(Err(error)))),
                         });
                     }
                     _ => self.output.on_key(available_height, key),
@@ -191,8 +177,7 @@ impl ModeTrait for Mode {
                 }
 
                 self.filter.filter(self.entries.iter());
-                self.select
-                    .saturate_cursor(self.filter.visible_indices().len());
+                self.select.saturate_cursor(self.filter.visible_indices().len());
             }
             Response::Details(mut info) | Response::Diff(mut info) => {
                 if info.is_empty() {
@@ -220,10 +205,7 @@ impl ModeTrait for Mode {
         };
 
         let (left_help, right_help) = match self.state {
-            State::Idle | State::Waiting(_) => (
-                "[p]pop [enter]details [D]discard",
-                "[arrows]move [ctrl+f]filter",
-            ),
+            State::Idle | State::Waiting(_) => ("[p]pop [enter]details [D]discard", "[arrows]move [ctrl+f]filter"),
             State::ViewDetails(_) => ("[enter]details", "[arrows]move"),
             State::ViewDiff => ("", "[arrows]move"),
         };
@@ -245,10 +227,7 @@ impl ModeTrait for Mode {
                             &self.select,
                             filter_line_count,
                             false,
-                            self.filter
-                                .visible_indices()
-                                .iter()
-                                .map(|&i| &self.entries[i]),
+                            self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
                         );
                     }
                 } else {
@@ -275,7 +254,6 @@ where
 
         let result = f(ctx.backend.deref()).and_then(|_| ctx.backend.stash_list());
 
-        ctx.event_sender
-            .send_response(ModeResponse::Stash(Response::Refresh(result)));
+        ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(result)));
     });
 }

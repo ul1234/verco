@@ -1,36 +1,27 @@
 use std::path::{Path, PathBuf};
 
 use super::{
-    Backend, BackendResult, BranchEntry, FileStatus, LogEntry, Process, RevisionEntry,
-    RevisionInfo, StashEntry, StatusInfo, TagEntry,
+    Backend, BackendResult, BranchEntry, FileStatus, LogEntry, Process, RevisionEntry, RevisionInfo, StashEntry, StatusInfo,
+    TagEntry,
 };
 
 pub struct Git;
 
 impl Git {
     pub fn try_new() -> Option<(PathBuf, Self)> {
-        let output = Process::spawn("git", &["rev-parse", "--show-toplevel"])
-            .ok()?
-            .wait()
-            .ok()?;
+        let output = Process::spawn("git", &["rev-parse", "--show-toplevel"]).ok()?.wait().ok()?;
 
         let root = Path::new(output.trim()).into();
         Some((root, Self))
     }
 
     fn remote(&self) -> BackendResult<String> {
-        let remote = Process::spawn("git", &["remote"])?
-            .wait()?
-            .trim()
-            .to_owned();
+        let remote = Process::spawn("git", &["remote"])?.wait()?.trim().to_owned();
         Ok(remote)
     }
 
     fn current_branch(&self) -> BackendResult<String> {
-        let branch = Process::spawn("git", &["symbolic-ref", "--short", "HEAD"])?
-            .wait()?
-            .trim()
-            .to_owned();
+        let branch = Process::spawn("git", &["symbolic-ref", "--short", "HEAD"])?.wait()?.trim().to_owned();
         Ok(branch)
     }
 
@@ -45,8 +36,7 @@ impl Git {
 
 impl Backend for Git {
     fn status(&self) -> BackendResult<StatusInfo> {
-        let output =
-            Process::spawn("git", &["status", "--branch", "--no-rename", "--null"])?.wait()?;
+        let output = Process::spawn("git", &["status", "--branch", "--no-rename", "--null"])?.wait()?;
         let mut splits = output.split('\0').map(str::trim);
 
         let header = splits.next().unwrap_or("").into();
@@ -85,11 +75,7 @@ impl Backend for Git {
             Process::spawn("git", &["clean", "--force"])?.wait()?;
         } else {
             let drop_entry = |f: fn(&FileStatus) -> bool, args: &[&str]| -> BackendResult<()> {
-                let filter_entries: Vec<_> = entries
-                    .iter()
-                    .filter(|&e| f(&e.status))
-                    .map(|e| e.name.as_str())
-                    .collect();
+                let filter_entries: Vec<_> = entries.iter().filter(|&e| f(&e.status)).map(|e| e.name.as_str()).collect();
 
                 if !filter_entries.is_empty() {
                     let args = [args.to_vec(), filter_entries].concat();
@@ -99,18 +85,9 @@ impl Backend for Git {
                 Ok(())
             };
 
-            drop_entry(
-                |status| matches!(status, FileStatus::Untracked),
-                &["clean", "--force", "--"],
-            )?;
-            drop_entry(
-                |status| matches!(status, FileStatus::Added),
-                &["rm", "--force", "--"],
-            )?;
-            drop_entry(
-                |status| !matches!(status, FileStatus::Untracked | FileStatus::Added),
-                &["checkout", "HEAD", "--"],
-            )?;
+            drop_entry(|status| matches!(status, FileStatus::Untracked), &["clean", "--force", "--"])?;
+            drop_entry(|status| matches!(status, FileStatus::Added), &["rm", "--force", "--"])?;
+            drop_entry(|status| !matches!(status, FileStatus::Untracked | FileStatus::Added), &["checkout", "HEAD", "--"])?;
         }
 
         Ok(())
@@ -155,10 +132,7 @@ impl Backend for Git {
         if entries.is_empty() {
             Process::spawn("git", &["checkout", "--ours", "."])?.wait()?;
         } else {
-            if !entries
-                .iter()
-                .any(|e| matches!(e.status, FileStatus::Unmerged))
-            {
+            if !entries.iter().any(|e| matches!(e.status, FileStatus::Unmerged)) {
                 return Ok(());
             }
 
@@ -183,10 +157,7 @@ impl Backend for Git {
         if entries.is_empty() {
             Process::spawn("git", &["checkout", "--theirs", "."])?.wait()?;
         } else {
-            if !entries
-                .iter()
-                .any(|e| matches!(e.status, FileStatus::Unmerged))
-            {
+            if !entries.iter().any(|e| matches!(e.status, FileStatus::Unmerged)) {
                 return Ok(());
             }
 
@@ -239,14 +210,7 @@ impl Backend for Git {
             let refs = splits.next().unwrap_or("").into();
             let message = splits.next().unwrap_or("").into();
 
-            entries.push(LogEntry {
-                graph,
-                hash,
-                date,
-                author,
-                refs,
-                message,
-            });
+            entries.push(LogEntry { graph, hash, date, author, refs, message });
         }
 
         Ok((skip, entries))
@@ -307,27 +271,11 @@ impl Backend for Git {
             .lines()
             .map(|l| {
                 let mut splits = l.splitn(3, ':');
-                let id = splits
-                    .next()
-                    .unwrap()
-                    .trim_matches(|c: char| !c.is_numeric())
-                    .parse::<usize>()
-                    .unwrap();
-                let branch = splits
-                    .next()
-                    .unwrap()
-                    .split(' ')
-                    .next_back()
-                    .unwrap()
-                    .trim()
-                    .to_owned();
+                let id = splits.next().unwrap().trim_matches(|c: char| !c.is_numeric()).parse::<usize>().unwrap();
+                let branch = splits.next().unwrap().split(' ').next_back().unwrap().trim().to_owned();
                 let message = splits.next().unwrap_or("").trim().to_owned();
 
-                StashEntry {
-                    id,
-                    branch,
-                    message,
-                }
+                StashEntry { id, branch, message }
             })
             .collect();
         Ok(entries)
@@ -354,35 +302,16 @@ impl Backend for Git {
     fn reset(&self, revision: &str) -> BackendResult<()> {
         let output = Process::spawn("git", &["status", "--null"])?.wait()?;
         if !output.is_empty() {
-            return Err(
-                "There are local changes! Please stash / commit / discard first.".to_owned(),
-            );
+            return Err("There are local changes! Please stash / commit / discard first.".to_owned());
         }
-        let revision = if revision == "" {
-            self.remote_branch()?
-        } else {
-            revision.to_owned()
-        };
+        let revision = if revision == "" { self.remote_branch()? } else { revision.to_owned() };
         Process::spawn("git", &["reset", "--hard", &revision])?.wait()?;
         Ok(())
     }
 
     fn revision_details(&self, revision: &str) -> BackendResult<RevisionInfo> {
-        let message = Process::spawn(
-            "git",
-            &["show", "-s", "--format=%B", "--no-renames", revision],
-        )?;
-        let changes = Process::spawn(
-            "git",
-            &[
-                "diff-tree",
-                "--no-commit-id",
-                "--name-status",
-                "-r",
-                "-z",
-                revision,
-            ],
-        )?;
+        let message = Process::spawn("git", &["show", "-s", "--format=%B", "--no-renames", revision])?;
+        let changes = Process::spawn("git", &["diff-tree", "--no-commit-id", "--name-status", "-r", "-z", revision])?;
 
         let message = message.wait()?.trim().into();
 

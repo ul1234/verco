@@ -70,11 +70,7 @@ pub struct RevisionEntry {
 }
 impl RevisionEntry {
     pub fn new(name: String, status: FileStatus) -> Self {
-        Self {
-            selected: false,
-            name,
-            status,
-        }
+        Self { selected: false, name, status }
     }
 }
 impl FilterEntry for RevisionEntry {
@@ -171,18 +167,11 @@ pub struct Process(Child);
 impl Process {
     pub fn spawn(command_name: &str, args: &[&str]) -> BackendResult<Self> {
         let mut command = Command::new(command_name);
-        command
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        command.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
         match command.spawn() {
             Ok(child) => Ok(Self(child)),
-            Err(error) => Err(format!(
-                "could not spawn process '{}': {}",
-                command_name, error
-            )),
+            Err(error) => Err(format!("could not spawn process '{}': {}", command_name, error)),
         }
     }
 

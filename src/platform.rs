@@ -14,17 +14,15 @@ use winapi::{
         processenv::GetStdHandle,
         winbase::{FILE_TYPE_CHAR, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE},
         wincon::{
-            GetConsoleScreenBufferInfo, ENABLE_PROCESSED_OUTPUT,
-            ENABLE_VIRTUAL_TERMINAL_PROCESSING, ENABLE_WINDOW_INPUT,
+            GetConsoleScreenBufferInfo, ENABLE_PROCESSED_OUTPUT, ENABLE_VIRTUAL_TERMINAL_PROCESSING, ENABLE_WINDOW_INPUT,
         },
         wincontypes::{
-            KEY_EVENT, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, RIGHT_ALT_PRESSED, RIGHT_CTRL_PRESSED,
-            WINDOW_BUFFER_SIZE_EVENT,
+            KEY_EVENT, LEFT_ALT_PRESSED, LEFT_CTRL_PRESSED, RIGHT_ALT_PRESSED, RIGHT_CTRL_PRESSED, WINDOW_BUFFER_SIZE_EVENT,
         },
         winnt::HANDLE,
         winuser::{
-            VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_F24, VK_HOME, VK_LEFT,
-            VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
+            VK_BACK, VK_DELETE, VK_DOWN, VK_END, VK_ESCAPE, VK_F1, VK_F24, VK_HOME, VK_LEFT, VK_NEXT, VK_PRIOR, VK_RETURN,
+            VK_RIGHT, VK_SPACE, VK_TAB, VK_UP,
         },
     },
 };
@@ -105,13 +103,7 @@ impl Platform {
 
     pub fn terminal_size() -> (u16, u16) {
         let mut size: libc::winsize = unsafe { std::mem::zeroed() };
-        let result = unsafe {
-            libc::ioctl(
-                libc::STDOUT_FILENO,
-                libc::TIOCGWINSZ as _,
-                &mut size as *mut libc::winsize,
-            )
-        };
+        let result = unsafe { libc::ioctl(libc::STDOUT_FILENO, libc::TIOCGWINSZ as _, &mut size as *mut libc::winsize) };
         if result == -1 || size.ws_col == 0 {
             panic!("could not get terminal size");
         }
@@ -266,12 +258,7 @@ impl PlatformEventReader {
 
         let resize_signal_fd = Some(resize_signal_fd);
 
-        Self {
-            backspace_code,
-            buf,
-            queue_fd,
-            resize_signal_fd,
-        }
+        Self { backspace_code, buf, queue_fd, resize_signal_fd }
     }
 
     pub fn init(&mut self) {
@@ -281,14 +268,9 @@ impl PlatformEventReader {
     }
 
     pub fn read_terminal_events(&mut self, keys: &mut Vec<Key>, resize: &mut Option<(u16, u16)>) {
-        fn epoll_wait<'a>(
-            epoll_fd: RawFd,
-            events: &'a mut [libc::epoll_event],
-        ) -> impl 'a + ExactSizeIterator<Item = usize> {
+        fn epoll_wait<'a>(epoll_fd: RawFd, events: &'a mut [libc::epoll_event]) -> impl 'a + ExactSizeIterator<Item = usize> {
             let timeout = -1;
-            let mut len = unsafe {
-                libc::epoll_wait(epoll_fd, events.as_mut_ptr(), events.len() as _, timeout)
-            };
+            let mut len = unsafe { libc::epoll_wait(epoll_fd, events.as_mut_ptr(), events.len() as _, timeout) };
             if len == -1 {
                 if PlatformEventReader::errno() == libc::EINTR {
                     len = 0;
@@ -307,9 +289,7 @@ impl PlatformEventReader {
             match event_index {
                 0 => match Self::read(libc::STDIN_FILENO, &mut self.buf) {
                     Ok(0) | Err(()) => panic!("could not read from stdin"),
-                    Ok(len) => {
-                        Self::parse_terminal_keys(&self.buf[..len], self.backspace_code, keys)
-                    }
+                    Ok(len) => Self::parse_terminal_keys(&self.buf[..len], self.backspace_code, keys),
                 },
                 1 => {
                     if let Some(fd) = self.resize_signal_fd {
@@ -326,29 +306,14 @@ impl PlatformEventReader {
     }
 }
 
-#[cfg(any(
-    target_os = "macos",
-    target_os = "freebsd",
-    target_os = "netbsd",
-    target_os = "openbsd",
-    target_os = "dragonfly",
-))]
+#[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", target_os = "dragonfly",))]
 impl PlatformEventReader {
     pub fn errno() -> libc::c_int {
         unsafe { *libc::__error() }
     }
 
     fn modify_kqueue(kqueue_fd: RawFd, event: &libc::kevent) {
-        let result = unsafe {
-            libc::kevent(
-                kqueue_fd,
-                event as _,
-                1,
-                std::ptr::null_mut(),
-                0,
-                std::ptr::null(),
-            )
-        };
+        let result = unsafe { libc::kevent(kqueue_fd, event as _, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
         if result != 0 {
             panic!("could not add event to kqueue");
         }
@@ -371,12 +336,7 @@ impl PlatformEventReader {
 
         Self::modify_kqueue(queue_fd, &stdin_event);
 
-        Self {
-            backspace_code,
-            buf: Vec::with_capacity(1024),
-            queue_fd,
-            resize_signal_fd: None,
-        }
+        Self { backspace_code, buf: Vec::with_capacity(1024), queue_fd, resize_signal_fd: None }
     }
 
     pub fn init(&mut self) {
@@ -402,16 +362,7 @@ impl PlatformEventReader {
             events: &'a mut [libc::kevent],
         ) -> impl 'a + ExactSizeIterator<Item = Result<TriggeredEvent, ()>> {
             let timeout = std::ptr::null();
-            let mut len = unsafe {
-                libc::kevent(
-                    kqueue_fd,
-                    [].as_ptr(),
-                    0,
-                    events.as_mut_ptr(),
-                    events.len() as _,
-                    timeout,
-                )
-            };
+            let mut len = unsafe { libc::kevent(kqueue_fd, [].as_ptr(), 0, events.as_mut_ptr(), events.len() as _, timeout) };
             if len == -1 {
                 if PlatformEventReader::errno() == libc::EINTR {
                     len = 0;
@@ -424,22 +375,13 @@ impl PlatformEventReader {
                 if e.flags & libc::EV_ERROR != 0 {
                     Err(())
                 } else {
-                    Ok(TriggeredEvent {
-                        index: e.udata as _,
-                        data: e.data as _,
-                    })
+                    Ok(TriggeredEvent { index: e.udata as _, data: e.data as _ })
                 }
             })
         }
 
-        const DEFAULT_KEVENT: libc::kevent = libc::kevent {
-            ident: 0,
-            filter: 0,
-            flags: 0,
-            fflags: 0,
-            data: 0,
-            udata: std::ptr::null_mut(),
-        };
+        const DEFAULT_KEVENT: libc::kevent =
+            libc::kevent { ident: 0, filter: 0, flags: 0, fflags: 0, data: 0, udata: std::ptr::null_mut() };
         let mut kqueue_events = [DEFAULT_KEVENT; MAX_TRIGGERED_EVENT_COUNT];
 
         for event in kqueue_wait(self.queue_fd, &mut kqueue_events) {
@@ -448,9 +390,7 @@ impl PlatformEventReader {
                     self.buf.resize(data as _, 0);
                     match Self::read(libc::STDIN_FILENO, &mut self.buf) {
                         Ok(0) | Err(()) => panic!("could not read from stdin"),
-                        Ok(len) => {
-                            Self::parse_terminal_keys(&self.buf[..len], self.backspace_code, keys)
-                        }
+                        Ok(len) => Self::parse_terminal_keys(&self.buf[..len], self.backspace_code, keys),
                     }
                 }
                 Ok(TriggeredEvent { index: 1, .. }) => *resize = Some(Platform::terminal_size()),
@@ -481,18 +421,10 @@ impl Platform {
         }
 
         let input_handle_original_mode = Self::swap_console_mode(input_handle, ENABLE_WINDOW_INPUT);
-        let output_handle_original_mode = Self::swap_console_mode(
-            output_handle,
-            ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-        );
+        let output_handle_original_mode =
+            Self::swap_console_mode(output_handle, ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
 
-        Some((
-            Self {
-                input_handle_original_mode,
-                output_handle_original_mode,
-            },
-            PlatformEventReader,
-        ))
+        Some((Self { input_handle_original_mode, output_handle_original_mode }, PlatformEventReader))
     }
 
     pub fn terminal_size() -> (u16, u16) {
@@ -563,14 +495,7 @@ impl PlatformEventReader {
 
         let mut events = [unsafe { std::mem::zeroed() }; 32];
         let mut event_count = 0;
-        let result = unsafe {
-            ReadConsoleInputW(
-                input_handle,
-                events.as_mut_ptr(),
-                events.len() as _,
-                &mut event_count,
-            )
-        };
+        let result = unsafe { ReadConsoleInputW(input_handle, events.as_mut_ptr(), events.len() as _, &mut event_count) };
         if result == FALSE {
             panic!("could not read console events");
         }
@@ -605,12 +530,10 @@ impl PlatformEventReader {
                         VK_DELETE => Key::Delete,
                         VK_F1..=VK_F24 => continue,
                         VK_ESCAPE => Key::Esc,
-                        VK_SPACE => {
-                            match std::char::decode_utf16(std::iter::once(unicode_char)).next() {
-                                Some(Ok(c)) => Key::Char(c),
-                                _ => continue,
-                            }
-                        }
+                        VK_SPACE => match std::char::decode_utf16(std::iter::once(unicode_char)).next() {
+                            Some(Ok(c)) => Key::Char(c),
+                            _ => continue,
+                        },
                         CHAR_A..=CHAR_Z => {
                             const ALT_PRESSED_MASK: DWORD = LEFT_ALT_PRESSED | RIGHT_ALT_PRESSED;
                             const CTRL_PRESSED_MASK: DWORD = LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED;
@@ -621,8 +544,7 @@ impl PlatformEventReader {
                                 let c = (keycode - CHAR_A) as u8 + b'a';
                                 Key::Ctrl(c.to_ascii_lowercase() as _)
                             } else {
-                                match std::char::decode_utf16(std::iter::once(unicode_char)).next()
-                                {
+                                match std::char::decode_utf16(std::iter::once(unicode_char)).next() {
                                     Some(Ok(c)) => Key::Char(c),
                                     _ => continue,
                                 }

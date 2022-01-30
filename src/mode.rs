@@ -96,10 +96,7 @@ impl Output {
             _ => self.scroll,
         };
 
-        self.scroll = self
-            .line_count
-            .saturating_sub(available_height)
-            .min(self.scroll);
+        self.scroll = self.line_count.saturating_sub(available_height).min(self.scroll);
     }
 }
 
@@ -176,12 +173,7 @@ impl SelectMenu {
         }
     }
 
-    pub fn on_key(
-        &mut self,
-        entries_len: usize,
-        available_height: usize,
-        key: Key,
-    ) -> SelectMenuAction {
+    pub fn on_key(&mut self, entries_len: usize, available_height: usize, key: Key) -> SelectMenuAction {
         let half_height = available_height / 2;
 
         self.cursor = match key {

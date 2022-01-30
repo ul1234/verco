@@ -165,11 +165,8 @@ fn terminal_event_loop(mut event_reader: PlatformEventReader, sender: mpsc::Sync
 pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>) {
     let (event_sender, event_receiver) = mpsc::sync_channel(1);
 
-    let mut ctx = ModeContext {
-        backend,
-        event_sender: EventSender(event_sender.clone()),
-        viewport_size: Platform::terminal_size(),
-    };
+    let mut ctx =
+        ModeContext { backend, event_sender: EventSender(event_sender.clone()), viewport_size: Platform::terminal_size() };
 
     let _ = thread::spawn(move || {
         terminal_event_loop(platform_event_reader, event_sender);
@@ -188,9 +185,7 @@ pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>
         let event = if application.is_waiting_response() {
             event_receiver.recv_timeout(TIMEOUT)
         } else {
-            event_receiver
-                .recv()
-                .map_err(|_| mpsc::RecvTimeoutError::Disconnected)
+            event_receiver.recv().map_err(|_| mpsc::RecvTimeoutError::Disconnected)
         };
 
         let mut draw_body = true;

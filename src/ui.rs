@@ -100,13 +100,7 @@ impl Drawer {
         clear_to_end(&mut self.buf);
     }
 
-    pub fn header(
-        &mut self,
-        current_mode_name: &str,
-        left_help: &str,
-        right_help: &str,
-        spinner: u8,
-    ) {
+    pub fn header(&mut self, current_mode_name: &str, left_help: &str, right_help: &str, spinner: u8) {
         let background_color = Color::Black;
         let foreground_color = Color::DarkYellow;
 
@@ -205,9 +199,7 @@ impl Drawer {
                     '-' => Color::DarkRed,
                     _ => Color::White,
                 };
-                if std::mem::discriminant(&new_foreground_color)
-                    != std::mem::discriminant(&foreground_color)
-                {
+                if std::mem::discriminant(&new_foreground_color) != std::mem::discriminant(&foreground_color) {
                     foreground_color = new_foreground_color;
                     set_foreground_color(&mut self.buf, foreground_color);
                 }
@@ -394,8 +386,7 @@ impl Drawer {
         set_foreground_color(&mut self.buf, Color::White);
 
         let mut line_count = 0;
-        let max_line_count =
-            (self.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT + header_height);
+        let max_line_count = (self.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT + header_height);
 
         for (i, entry) in entries.enumerate().skip(select.scroll) {
             let hovered = i == cursor_index;
