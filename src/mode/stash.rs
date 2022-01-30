@@ -3,8 +3,7 @@ use std::thread;
 use crate::{
     backend::{Backend, BackendResult, StashEntry},
     mode::{
-        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine,
-        SelectMenu,
+        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu,
     },
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
@@ -19,7 +18,6 @@ pub enum Response {
 enum WaitOperation {
     Refresh,
     Discard,
-    Pop,
 }
 
 enum State {
@@ -139,6 +137,15 @@ impl ModeTrait for Mode {
                                 });
                             }
                         }
+                        Key::Char('D') => {
+                            if let Some(current_entry_index) = current_entry_index {
+                                self.state = State::Waiting(WaitOperation::Discard);
+                                let entry = &self.entries[current_entry_index];
+                                let id = entry.id;
+
+                                request(ctx, move |b| b.stash_drop(id));
+                            }
+                        }
                         _ => (),
                     }
                 }
@@ -208,14 +215,13 @@ impl ModeTrait for Mode {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "stash list",
             State::Waiting(WaitOperation::Discard) => "discard",
-            State::Waiting(WaitOperation::Pop) => "pop",
             State::ViewDetails(_) => "stash details",
             State::ViewDiff => "diff",
         };
 
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
-                "[p]pop [enter]details [d]discard",
+                "[p]pop [enter]details [D]discard",
                 "[arrows]move [ctrl+f]filter",
             ),
             State::ViewDetails(_) => ("[enter]details", "[arrows]move"),

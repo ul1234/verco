@@ -176,7 +176,7 @@ impl ModeTrait for Mode {
                                 self.readline.clear();
                             }
                         }
-                        Key::Char('R') => {
+                        Key::Char('D') => {
                             if matches!(self.state, State::Idle) && !self.entries.is_empty() {
                                 self.state = State::Waiting(WaitOperation::Discard);
                                 let entries = self.get_selected_entries();
@@ -334,7 +334,7 @@ impl ModeTrait for Mode {
         };
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
-                "[c]commit [R]revert [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
+                "[c]commit [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
                 "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
             State::CommitMessageInput | State::StashMessageInput => (

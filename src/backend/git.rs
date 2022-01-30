@@ -81,57 +81,36 @@ impl Backend for Git {
 
     fn discard(&self, entries: &[RevisionEntry]) -> BackendResult<()> {
         if entries.is_empty() {
-            Process::spawn("git", &["reset", "--hard"])?.wait()?;
-            Process::spawn("git", &["clean", "-d", "--force"])?.wait()?;
+            Process::spawn("git", &["reset", "--hard", "HEAD"])?.wait()?;
+            Process::spawn("git", &["clean", "--force"])?.wait()?;
         } else {
-            let mut args = Vec::new();
-            args.push("clean");
-            args.push("--force");
-            args.push("--");
-            for entry in entries {
-                if let FileStatus::Untracked = entry.status {
-                    args.push(&entry.name);
+            let drop_entry = |f: fn(&FileStatus) -> bool, args: &[&str]| -> BackendResult<()> {
+                let filter_entries: Vec<_> = entries
+                    .iter()
+                    .filter(|&e| f(&e.status))
+                    .map(|e| e.name.as_str())
+                    .collect();
+
+                if !filter_entries.is_empty() {
+                    let args = [args.to_vec(), filter_entries].concat();
+                    Process::spawn("git", &args)?.wait()?;
                 }
-            }
-            let clean = if args.len() > 3 {
-                Some(Process::spawn("git", &args)?)
-            } else {
-                None
+
+                Ok(())
             };
 
-            args.clear();
-            args.push("rm");
-            args.push("--force");
-            args.push("--");
-            for entry in entries {
-                if let FileStatus::Added = entry.status {
-                    args.push(&entry.name);
-                }
-            }
-            let rm = if args.len() > 3 {
-                Some(Process::spawn("git", &args)?)
-            } else {
-                None
-            };
-
-            if let Some(clean) = clean {
-                clean.wait()?;
-            }
-            if let Some(rm) = rm {
-                rm.wait()?;
-            }
-
-            args.clear();
-            args.push("checkout");
-            args.push("--");
-            for entry in entries {
-                if !matches!(entry.status, FileStatus::Untracked | FileStatus::Added,) {
-                    args.push(&entry.name);
-                }
-            }
-            if args.len() > 2 {
-                Process::spawn("git", &args)?.wait()?;
-            }
+            drop_entry(
+                |status| matches!(status, FileStatus::Untracked),
+                &["clean", "--force", "--"],
+            )?;
+            drop_entry(
+                |status| matches!(status, FileStatus::Added),
+                &["rm", "--force", "--"],
+            )?;
+            drop_entry(
+                |status| !matches!(status, FileStatus::Untracked | FileStatus::Added),
+                &["checkout", "HEAD", "--"],
+            )?;
         }
 
         Ok(())
@@ -367,10 +346,17 @@ impl Backend for Git {
         Process::spawn("git", &["stash", "show", "-p", id.to_string().as_str()])?.wait()
     }
 
+    fn stash_drop(&self, id: usize) -> BackendResult<()> {
+        Process::spawn("git", &["stash", "drop", id.to_string().as_str()])?.wait()?;
+        Ok(())
+    }
+
     fn reset(&self, revision: &str) -> BackendResult<()> {
         let output = Process::spawn("git", &["status", "--null"])?.wait()?;
         if !output.is_empty() {
-            return Err("There are local changes! Please stash / commit / discard first.".to_owned());
+            return Err(
+                "There are local changes! Please stash / commit / discard first.".to_owned(),
+            );
         }
         let revision = if revision == "" {
             self.remote_branch()?
