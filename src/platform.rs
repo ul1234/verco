@@ -47,7 +47,7 @@ pub enum Key {
 }
 impl Key {
     pub fn is_submit(&self) -> bool {
-        matches!(self, Self::Enter | Self::Char('\n') | Self::Ctrl('m'))
+        matches!(self, Self::Enter | Self::Char('\n'))
     }
 
     pub fn is_cancel(&self) -> bool {

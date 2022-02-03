@@ -2,7 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{RevisionEntry, RevisionInfo},
-    mode::{Filter, ModeContext, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu, SelectMenuAction},
+    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu, SelectMenuAction},
     platform::Key,
     ui::{Drawer, RESERVED_LINES_COUNT},
 };
@@ -10,8 +10,10 @@ use crate::{
 pub enum Response {
     Info(RevisionInfo),
     Diff(String),
+    Restore,
 }
 
+#[derive(Clone)]
 enum State {
     Idle,
     Waiting,
@@ -23,7 +25,7 @@ impl Default for State {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Mode {
     state: State,
     entries: Vec<RevisionEntry>,
@@ -31,6 +33,8 @@ pub struct Mode {
     select: SelectMenu,
     filter: Filter,
     show_full_message: bool,
+    from: ModeKind,
+    content: Option<Box<Mode>>,
 }
 impl Mode {
     fn get_selected_entries(&self) -> Vec<RevisionEntry> {
@@ -39,6 +43,22 @@ impl Mode {
 }
 
 impl ModeTrait for Mode {
+    fn save(&mut self) {
+        self.content = None;
+        let mode = self.clone();
+        self.content = Some(Box::new(mode));
+    }
+
+    fn restore(&mut self) {
+        match &mut self.content {
+            Some(mode) => {
+                mode.content = None;
+                *self = *mode.clone();
+            }
+            None => (),
+        }
+    }
+
     fn on_enter(&mut self, ctx: &ModeContext, revision: &str) {
         if let State::Waiting = self.state {
             return;
@@ -102,6 +122,8 @@ impl ModeTrait for Mode {
                         }
                         Key::Enter => {
                             if !self.entries.is_empty() {
+                                self.save();
+
                                 self.state = State::ViewDiff;
                                 self.output.set(String::new());
                                 self.filter.clear();
@@ -122,7 +144,18 @@ impl ModeTrait for Mode {
                         _ => (),
                     }
                 }
-                State::ViewDiff => self.output.on_key(available_height, key),
+                State::ViewDiff => match key {
+                    Key::Char('q') | Key::Left => {
+                        self.state = State::Waiting;
+                        self.output.set(String::new());
+
+                        let ctx = ctx.clone();
+                        thread::spawn(move || {
+                            ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Restore));
+                        });
+                    }
+                    _ => self.output.on_key(available_height, key),
+                },
                 _ => (),
             }
         }
@@ -133,6 +166,13 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
         match response {
+            Response::Restore => {
+                self.restore();
+
+                if let State::Waiting = self.state {
+                    self.state = State::Idle;
+                }
+            }
             Response::Info(info) => {
                 if let State::Waiting = self.state {
                     self.state = State::Idle;

@@ -79,7 +79,7 @@ impl FilterEntry for RevisionEntry {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LogEntry {
     pub graph: String,
     pub hash: String,
@@ -98,6 +98,7 @@ impl FilterEntry for LogEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct BranchEntry {
     pub name: String,
     pub checked_out: bool,
@@ -108,6 +109,7 @@ impl FilterEntry for BranchEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct TagEntry {
     pub name: String,
 }
@@ -117,6 +119,7 @@ impl FilterEntry for TagEntry {
     }
 }
 
+#[derive(Clone)]
 pub struct StashEntry {
     pub id: usize,
     pub branch: String,

@@ -18,6 +18,7 @@ pub enum ModeResponse {
     Stash(stash::Response),
 }
 
+#[derive(Clone)]
 pub enum ModeKind {
     Status,
     Log,
@@ -39,6 +40,8 @@ pub trait ModeTrait {
     fn on_response(&mut self, response: ModeResponse);
     fn header(&self) -> (&str, &str, &str);
     fn draw(&self, drawer: &mut Drawer);
+    fn save(&mut self);
+    fn restore(&mut self);
 }
 
 #[derive(Clone)]
@@ -52,7 +55,7 @@ pub struct ModeStatus {
     pub pending_input: bool,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Output {
     text: String,
     line_count: usize,
@@ -87,8 +90,8 @@ impl Output {
         let half_height = available_height / 2;
 
         self.scroll = match key {
-            Key::Down | Key::Ctrl('n') | Key::Char('j') => self.scroll + 1,
-            Key::Up | Key::Ctrl('p') | Key::Char('k') => self.scroll.saturating_sub(1),
+            Key::Down | Key::Char('j') => self.scroll + 1,
+            Key::Up | Key::Char('k') => self.scroll.saturating_sub(1),
             Key::Ctrl('h') | Key::Home => 0,
             Key::Ctrl('e') | Key::End => usize::MAX,
             Key::Ctrl('d') | Key::PageDown => self.scroll + half_height,
@@ -100,7 +103,7 @@ impl Output {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct ReadLine {
     input: String,
 }
@@ -157,7 +160,7 @@ pub enum SelectMenuAction {
     ToggleAll,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct SelectMenu {
     pub cursor: usize,
     pub scroll: usize, // index of the first line when scrolling
@@ -206,7 +209,7 @@ pub trait FilterEntry {
     fn fuzzy_matches(&self, pattern: &str) -> bool;
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Filter {
     has_focus: bool,
     readline: ReadLine,

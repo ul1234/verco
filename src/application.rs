@@ -100,13 +100,17 @@ impl Application {
                 return false;
             }
 
-            match key {
-                Key::Char('s') => self.enter_mode(ctx, ModeKind::Status),
-                Key::Char('l') => self.enter_mode(ctx, ModeKind::Log),
-                Key::Char('b') => self.enter_mode(ctx, ModeKind::Branches),
-                Key::Char('t') => self.enter_mode(ctx, ModeKind::Tags),
-                Key::Char('S') => self.enter_mode(ctx, ModeKind::Stash),
-                _ => (),
+            let target_mode_kind = match key {
+                Key::Char('s') => Some(ModeKind::Status),
+                Key::Char('l') => Some(ModeKind::Log),
+                Key::Char('b') => Some(ModeKind::Branches),
+                Key::Char('t') => Some(ModeKind::Tags),
+                Key::Char('S') => Some(ModeKind::Stash),
+                _ => None,
+            };
+
+            if let Some(target_mode_kind) = target_mode_kind {
+                self.enter_mode(ctx, target_mode_kind);
             }
         }
 

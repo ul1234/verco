@@ -10,6 +10,7 @@ pub enum Response {
     Refresh(BackendResult<(usize, Vec<LogEntry>)>),
 }
 
+#[derive(Clone)]
 enum WaitOperation {
     Refresh,
     Checkout,
@@ -20,6 +21,7 @@ enum WaitOperation {
     Reset,
 }
 
+#[derive(Clone)]
 enum State {
     Idle,
     Waiting(WaitOperation),
@@ -122,7 +124,7 @@ impl SelectEntryDraw for LogEntry {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Mode {
     state: State,
     entries: Vec<LogEntry>,
@@ -130,8 +132,26 @@ pub struct Mode {
     select: SelectMenu,
     filter: Filter,
     show_full_hovered_message: bool,
+    from: ModeKind,
+    content: Option<Box<Mode>>,
 }
 impl ModeTrait for Mode {
+    fn save(&mut self) {
+        self.content = None;
+        let mode = self.clone();
+        self.content = Some(Box::new(mode));
+    }
+
+    fn restore(&mut self) {
+        match &mut self.content {
+            Some(mode) => {
+                mode.content = None;
+                *self = *mode.clone();
+            }
+            None => (),
+        }
+    }
+
     fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
         if let State::Waiting(_) = self.state {
             return;

@@ -13,8 +13,10 @@ pub enum Response {
     Refresh(StatusInfo),
     Commit,
     Diff(String),
+    Restore,
 }
 
+#[derive(Clone)]
 enum WaitOperation {
     Refresh,
     Commit,
@@ -24,6 +26,7 @@ enum WaitOperation {
     ResolveTakingTheirs,
 }
 
+#[derive(Clone)]
 enum State {
     Idle,
     Waiting(WaitOperation),
@@ -63,7 +66,7 @@ impl SelectEntryDraw for RevisionEntry {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Mode {
     state: State,
     entries: Vec<RevisionEntry>,
@@ -71,6 +74,8 @@ pub struct Mode {
     select: SelectMenu,
     filter: Filter,
     readline: ReadLine,
+    from: ModeKind,
+    content: Option<Box<Mode>>,
 }
 impl Mode {
     fn get_selected_entries(&self) -> Vec<RevisionEntry> {
@@ -102,6 +107,22 @@ impl Mode {
 }
 
 impl ModeTrait for Mode {
+    fn save(&mut self) {
+        self.content = None;
+        let mode = self.clone();
+        self.content = Some(Box::new(mode));
+    }
+
+    fn restore(&mut self) {
+        match &mut self.content {
+            Some(mode) => {
+                mode.content = None;
+                *self = *mode.clone();
+            }
+            None => (),
+        }
+    }
+
     fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
         if let State::Waiting(_) = self.state {
             return;
@@ -193,6 +214,8 @@ impl ModeTrait for Mode {
                         }
                         Key::Enter => {
                             if !self.entries.is_empty() {
+                                self.save();
+
                                 self.state = State::ViewDiff;
                                 self.output.set(String::new());
                                 self.filter.clear();
@@ -255,7 +278,18 @@ impl ModeTrait for Mode {
                         self.on_enter(ctx, "");
                     }
                 }
-                _ => self.output.on_key(available_height, key),
+                State::ViewDiff => match key {
+                    Key::Char('q') | Key::Left => {
+                        self.state = State::Waiting(WaitOperation::Refresh);
+                        self.output.set(String::new());
+
+                        let ctx = ctx.clone();
+                        thread::spawn(move || {
+                            ctx.event_sender.send_response(ModeResponse::Status(Response::Restore));
+                        });
+                    }
+                    _ => self.output.on_key(available_height, key),
+                },
             }
         }
 
@@ -265,6 +299,13 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Status).unwrap();
         match response {
+            Response::Restore => {
+                self.restore();
+
+                if let State::Waiting(_) = self.state {
+                    self.state = State::Idle;
+                }
+            }
             Response::Refresh(info) => {
                 if let State::Waiting(_) = self.state {
                     self.state = State::Idle;
