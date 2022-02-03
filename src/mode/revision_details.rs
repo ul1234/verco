@@ -7,6 +7,8 @@ use crate::{
     ui::{Drawer, RESERVED_LINES_COUNT},
 };
 
+use super::log;
+
 pub enum Response {
     Info(RevisionInfo),
     Diff(String),
@@ -140,6 +142,13 @@ impl ModeTrait for Mode {
                                     ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Diff(output)));
                                 });
                             }
+                        }
+                        Key::Char('q') | Key::Left => {
+                            let ctx = ctx.clone();
+                            thread::spawn(move || {
+                                ctx.event_sender.send_mode_change(ModeKind::Log);
+                                ctx.event_sender.send_response(ModeResponse::Log(log::Response::Restore));
+                            });
                         }
                         _ => (),
                     }

@@ -8,6 +8,7 @@ use std::thread;
 
 pub enum Response {
     Refresh(BackendResult<(usize, Vec<LogEntry>)>),
+    Restore,
 }
 
 #[derive(Clone)]
@@ -192,6 +193,7 @@ impl ModeTrait for Mode {
 
             if let Key::Enter = key {
                 if let Some(current_entry_index) = current_entry_index {
+                    self.save();
                     let entry = &self.entries[current_entry_index];
                     ctx.event_sender.send_mode_change(ModeKind::RevisionDetails(entry.hash.clone()));
                 }
@@ -253,6 +255,13 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Log).unwrap();
         match response {
+            Response::Restore => {
+                self.restore();
+
+                if let State::Waiting(_) = self.state {
+                    self.state = State::Idle;
+                }
+            }
             Response::Refresh(result) => {
                 self.output.set(String::new());
 
