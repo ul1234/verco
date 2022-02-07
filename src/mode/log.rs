@@ -1,6 +1,6 @@
 use crate::{
     backend::{Backend, BackendResult, LogEntry},
-    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu},
+    mode::*,
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -8,10 +8,9 @@ use std::thread;
 
 pub enum Response {
     Refresh(BackendResult<(usize, Vec<LogEntry>)>),
-    Restore,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum WaitOperation {
     Refresh,
     Checkout,
@@ -22,7 +21,7 @@ enum WaitOperation {
     Reset,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum State {
     Idle,
     Waiting(WaitOperation),
@@ -125,7 +124,7 @@ impl SelectEntryDraw for LogEntry {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Mode {
     state: State,
     entries: Vec<LogEntry>,
@@ -134,26 +133,9 @@ pub struct Mode {
     filter: Filter,
     show_full_hovered_message: bool,
     from: ModeKind,
-    content: Option<Box<Mode>>,
 }
 impl ModeTrait for Mode {
-    fn save(&mut self) {
-        self.content = None;
-        let mode = self.clone();
-        self.content = Some(Box::new(mode));
-    }
-
-    fn restore(&mut self) {
-        match &mut self.content {
-            Some(mode) => {
-                mode.content = None;
-                *self = *mode.clone();
-            }
-            None => (),
-        }
-    }
-
-    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
+    fn on_enter(&mut self, ctx: &ModeContext, _info: ModeChangeInfo) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -167,7 +149,7 @@ impl ModeTrait for Mode {
         request(ctx, |_| Ok(()));
     }
 
-    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
         let pending_input = self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
@@ -193,9 +175,11 @@ impl ModeTrait for Mode {
 
             if let Key::Enter = key {
                 if let Some(current_entry_index) = current_entry_index {
-                    self.save();
                     let entry = &self.entries[current_entry_index];
-                    ctx.event_sender.send_mode_change(ModeKind::RevisionDetails(entry.hash.clone()));
+                    ctx.event_sender.send_mode_change(
+                        ModeKind::RevisionDetails,
+                        ModeChangeInfo::new_revision(ModeKind::Log, entry.hash.clone()),
+                    );
                 }
             } else if let Key::Tab = key {
                 self.show_full_hovered_message = !self.show_full_hovered_message;
@@ -255,13 +239,6 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Log).unwrap();
         match response {
-            Response::Restore => {
-                self.restore();
-
-                if let State::Waiting(_) = self.state {
-                    self.state = State::Idle;
-                }
-            }
             Response::Refresh(result) => {
                 self.output.set(String::new());
 

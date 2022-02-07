@@ -2,7 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{Backend, BackendResult, StashEntry},
-    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, SelectMenu},
+    mode::*,
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -11,16 +11,15 @@ pub enum Response {
     Refresh(BackendResult<Vec<StashEntry>>),
     Details(String),
     Diff(String),
-    Restore,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum WaitOperation {
     Refresh,
     Discard,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum State {
     Idle,
     Waiting(WaitOperation),
@@ -55,7 +54,7 @@ impl SelectEntryDraw for StashEntry {
         1
     }
 }
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Mode {
     state: State,
     entries: Vec<StashEntry>,
@@ -63,27 +62,10 @@ pub struct Mode {
     select: SelectMenu,
     filter: Filter,
     from: ModeKind,
-    content: Option<Box<Mode>>,
 }
 
 impl ModeTrait for Mode {
-    fn save(&mut self) {
-        self.content = None;
-        let mode = self.clone();
-        self.content = Some(Box::new(mode));
-    }
-
-    fn restore(&mut self) {
-        match &mut self.content {
-            Some(mode) => {
-                mode.content = None;
-                *self = *mode.clone();
-            }
-            None => (),
-        }
-    }
-
-    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
+    fn on_enter(&mut self, ctx: &ModeContext, _info: ModeChangeInfo) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -96,7 +78,7 @@ impl ModeTrait for Mode {
         request(ctx, |_| Ok(()));
     }
 
-    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
         let pending_input = self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
@@ -139,8 +121,8 @@ impl ModeTrait for Mode {
 
                                 thread::spawn(move || match ctx.backend.stash_pop(id) {
                                     Ok(()) => {
-                                        ctx.event_sender.send_mode_change(ModeKind::Status);
-                                        ctx.event_sender.send_mode_refresh(ModeKind::Status);
+                                        ctx.event_sender
+                                            .send_mode_change(ModeKind::Status, ModeChangeInfo::new(ModeKind::Stash));
                                     }
                                     Err(error) => {
                                         ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(Err(error))))
@@ -162,8 +144,6 @@ impl ModeTrait for Mode {
                 }
                 State::ViewDetails(id) => match key {
                     Key::Enter => {
-                        self.save();
-
                         self.state = State::ViewDiff;
                         self.output.set(String::new());
 
@@ -182,7 +162,7 @@ impl ModeTrait for Mode {
 
                         let ctx = ctx.clone();
                         thread::spawn(move || {
-                            ctx.event_sender.send_response(ModeResponse::Stash(Response::Restore));
+                            //ctx.event_sender.send_response(ModeResponse::Stash(Response::Restore));
                         });
                     }
                     _ => self.output.on_key(available_height, key),
@@ -196,13 +176,6 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Stash).unwrap();
         match response {
-            Response::Restore => {
-                self.restore();
-
-                if let State::Waiting(_) = self.state {
-                    self.state = State::Idle;
-                }
-            }
             Response::Refresh(result) => {
                 self.entries = Vec::new();
                 self.output.set(String::new());

@@ -9,12 +9,15 @@ use crate::{
 
 pub enum Response {
     Info(RevisionInfo),
+    Diff(String),
+    Restore,
 }
 
 #[derive(Clone, Debug)]
 enum State {
     Idle,
     Waiting,
+    ViewDiff,
 }
 impl Default for State {
     fn default() -> Self {
@@ -50,11 +53,9 @@ impl ModeTrait for Mode {
         self.filter.clear();
         self.select.cursor = 0;
         self.show_full_message = false;
-        self.from = info.from;
-        self.revision = as_variant!(info.info.unwrap(), ModeInfo::RevisionDetails).unwrap();
 
         let ctx = ctx.clone();
-        let revision = self.revision.clone();
+        let revision = as_variant!(info.info.unwrap(), ModeInfo::RevisionDetails).unwrap();
         thread::spawn(move || {
             let mut info = match ctx.backend.revision_details(&revision) {
                 Ok(info) => info,
@@ -62,7 +63,7 @@ impl ModeTrait for Mode {
             };
             info.entries.sort_unstable_by(|a, b| a.status.cmp(&b.status));
 
-            ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Info(info)));
+            //ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Info(info)));
         });
     }
 
@@ -105,31 +106,43 @@ impl ModeTrait for Mode {
                         }
                         Key::Enter => {
                             if !self.entries.is_empty() {
+                                self.state = State::ViewDiff;
+
                                 let entries = self.get_selected_entries();
+
                                 let ctx = ctx.clone();
                                 let revision = self.revision.clone();
-                                log(format!("revision: \n, {}\n", revision));
-                                log(format!("entries: \n, {:?}\n", entries));
-
                                 thread::spawn(move || {
-                                    ctx.event_sender
-                                        .send_mode_change(ModeKind::Diff, ModeChangeInfo::new(ModeKind::RevisionDetails));
-
                                     let output = match ctx.backend.diff(Some(&revision), &entries) {
                                         Ok(output) => output,
                                         Err(error) => error,
                                     };
-                                    log(format!("output: \n, {}\n", output));
-                                    ctx.event_sender.send_response(ModeResponse::Diff(diff::Response::Refresh(output)));
+                                    //ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Diff(output)));
                                 });
                             }
                         }
                         Key::Char('q') | Key::Left => {
-                            ctx.event_sender.send_mode_revert();
+                            let ctx = ctx.clone();
+                            thread::spawn(move || {
+                                ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::StashDetails));
+                                //ctx.event_sender.send_response(ModeResponse::Log(log::Response::Restore));
+                            });
                         }
                         _ => (),
                     }
                 }
+                State::ViewDiff => match key {
+                    Key::Char('q') | Key::Left => {
+                        self.state = State::Waiting;
+                        self.output.set(String::new());
+
+                        let ctx = ctx.clone();
+                        thread::spawn(move || {
+                            //ctx.event_sender.send_response(ModeResponse::RevisionDetails(Response::Restore));
+                        });
+                    }
+                    _ => self.output.on_key(available_height, key),
+                },
                 _ => (),
             }
         }
@@ -138,28 +151,14 @@ impl ModeTrait for Mode {
     }
 
     fn on_response(&mut self, response: ModeResponse) {
-        let response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
-        match response {
-            Response::Info(info) => {
-                if let State::Waiting = self.state {
-                    self.state = State::Idle;
-                }
-                if let State::Idle = self.state {
-                    self.output.set(info.message);
-                }
-
-                self.entries = info.entries;
-
-                self.filter.filter(self.entries.iter());
-                self.select.saturate_cursor(self.filter.visible_indices().len());
-            }
-        }
+        let _response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
     }
 
     fn is_waiting_response(&self) -> bool {
         match self.state {
             State::Idle => false,
             State::Waiting => true,
+            State::ViewDiff => self.output.text().is_empty(),
         }
     }
 
@@ -170,13 +169,16 @@ impl ModeTrait for Mode {
                 "[enter]diff",
                 "[tab]full message [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
+            State::ViewDiff => ("diff", "", "[arrows]move"),
         }
     }
 
     fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
 
-        let line_count = if self.show_full_message {
+        let line_count = if let State::ViewDiff = self.state {
+            drawer.diff(&self.output)
+        } else if self.show_full_message {
             drawer.output(&self.output)
         } else {
             let output = self.output.text().lines().next().unwrap_or("");

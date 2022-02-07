@@ -1,11 +1,16 @@
+use std::fs;
+use std::io::Write;
 use std::sync::Arc;
 
 use crate::{application::EventSender, backend::Backend, platform::Key, ui::Drawer};
 
 pub mod branches;
+pub mod diff;
 pub mod log;
+pub mod message_input;
 pub mod revision_details;
 pub mod stash;
+pub mod stash_details;
 pub mod status;
 pub mod tags;
 
@@ -16,16 +21,149 @@ pub enum ModeResponse {
     Branches(branches::Response),
     Tags(tags::Response),
     Stash(stash::Response),
+    Diff(diff::Response),
+    StashDetails(stash_details::Response),
+    MessageInput(message_input::Response),
+}
+impl ModeResponse {
+    pub fn mode_kind(&self) -> ModeKind {
+        match self {
+            ModeResponse::Status(_) => ModeKind::Status,
+            ModeResponse::Log(_) => ModeKind::Log,
+            ModeResponse::RevisionDetails(_) => ModeKind::RevisionDetails,
+            ModeResponse::Branches(_) => ModeKind::Branches,
+            ModeResponse::Tags(_) => ModeKind::Tags,
+            ModeResponse::Stash(_) => ModeKind::Stash,
+            ModeResponse::Diff(_) => ModeKind::Diff,
+            ModeResponse::StashDetails(_) => ModeKind::StashDetails,
+            ModeResponse::MessageInput(_) => ModeKind::MessageInput,
+        }
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+pub enum Mode {
+    Status(status::Mode),
+    Log(log::Mode),
+    RevisionDetails(revision_details::Mode),
+    Branches(branches::Mode),
+    Tags(tags::Mode),
+    Stash(stash::Mode),
+    Diff(diff::Mode),
+    StashDetails(stash_details::Mode),
+    MessageInput(message_input::Mode),
+}
+impl Default for Mode {
+    fn default() -> Self {
+        Self::Status(status::Mode::default())
+    }
+}
+
+impl Mode {
+    fn default_from_mode_kind(mode_kind: ModeKind) -> Self {
+        match mode_kind {
+            ModeKind::Status => Self::Status(status::Mode::default()),
+            ModeKind::Log => Self::Log(log::Mode::default()),
+            ModeKind::RevisionDetails => Self::RevisionDetails(revision_details::Mode::default()),
+            ModeKind::Branches => Self::Branches(branches::Mode::default()),
+            ModeKind::Tags => Self::Tags(tags::Mode::default()),
+            ModeKind::Stash => Self::Stash(stash::Mode::default()),
+            ModeKind::Diff => Self::Diff(diff::Mode::default()),
+            ModeKind::StashDetails => Self::StashDetails(stash_details::Mode::default()),
+            ModeKind::MessageInput => Self::MessageInput(message_input::Mode::default()),
+        }
+    }
+
+    fn mode(&mut self) -> &mut dyn ModeTrait {
+        match self {
+            Self::Status(mode) => mode,
+            Self::Log(mode) => mode,
+            Self::RevisionDetails(mode) => mode,
+            Self::Branches(mode) => mode,
+            Self::Tags(mode) => mode,
+            Self::Stash(mode) => mode,
+            Self::Diff(mode) => mode,
+            Self::StashDetails(mode) => mode,
+            Self::MessageInput(mode) => mode,
+        }
+    }
+
+    pub fn mode_kind(&self) -> ModeKind {
+        match self {
+            Self::Status(_) => ModeKind::Status,
+            Self::Log(_) => ModeKind::Log,
+            Self::RevisionDetails(_) => ModeKind::RevisionDetails,
+            Self::Branches(_) => ModeKind::Branches,
+            Self::Tags(_) => ModeKind::Tags,
+            Self::Stash(_) => ModeKind::Stash,
+            Self::Diff(_) => ModeKind::Diff,
+            Self::StashDetails(_) => ModeKind::StashDetails,
+            Self::MessageInput(_) => ModeKind::MessageInput,
+        }
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct ModeBuf {
+    mode: Mode,
+    history: Vec<Mode>,
+}
+
+impl ModeBuf {
+    pub fn mode(&mut self) -> &mut dyn ModeTrait {
+        self.mode.mode()
+    }
+
+    pub fn mode_kind(&self) -> ModeKind {
+        self.mode.mode_kind()
+    }
+
+    pub fn enter_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind, info: ModeChangeInfo) {
+        if self.mode.mode_kind() != mode_kind {
+            log(format!("before enter to {:?}:\n {:?}\n", mode_kind, self.mode));
+            self.history.push(self.mode.clone());
+        }
+        self.mode = Mode::default_from_mode_kind(mode_kind);
+        self.mode().on_enter(ctx, info);
+    }
+
+    pub fn revert_mode(&mut self, ctx: &ModeContext) {
+        if let Some(mode) = self.history.pop() {
+            log(format!("after pop: \n {:?}\n", mode));
+            self.mode = mode;
+        }
+    }
+}
+
+pub struct ModeChangeInfo {
+    from: ModeKind,
+    info: Option<ModeInfo>,
+}
+impl ModeChangeInfo {
+    pub fn new(from: ModeKind) -> Self {
+        Self { from, info: None }
+    }
+
+    pub fn new_revision(from: ModeKind, revision: String) -> Self {
+        Self { from, info: Some(ModeInfo::RevisionDetails(revision)) }
+    }
+}
+
+pub enum ModeInfo {
+    RevisionDetails(String),
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub enum ModeKind {
     Status,
     Log,
-    RevisionDetails(String),
+    RevisionDetails,
     Branches,
     Tags,
     Stash,
+    Diff,
+    StashDetails,
+    MessageInput,
 }
 impl Default for ModeKind {
     fn default() -> Self {
@@ -34,14 +172,12 @@ impl Default for ModeKind {
 }
 
 pub trait ModeTrait {
-    fn on_enter(&mut self, ctx: &ModeContext, revision: &str);
-    fn on_key(&mut self, ctx: &ModeContext, key: Key, revision: &str) -> ModeStatus;
+    fn on_enter(&mut self, ctx: &ModeContext, info: ModeChangeInfo);
+    fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus;
     fn is_waiting_response(&self) -> bool;
     fn on_response(&mut self, response: ModeResponse);
     fn header(&self) -> (&str, &str, &str);
     fn draw(&self, drawer: &mut Drawer);
-    fn save(&mut self);
-    fn restore(&mut self);
 }
 
 #[derive(Clone)]
@@ -51,11 +187,17 @@ pub struct ModeContext {
     pub viewport_size: (u16, u16),
 }
 
+pub fn log(info: String) {
+    let mut file = fs::OpenOptions::new().write(true).append(true).open("test.txt").expect("log failed");
+
+    file.write_all(info.as_bytes()).unwrap();
+}
+
 pub struct ModeStatus {
     pub pending_input: bool,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Output {
     text: String,
     line_count: usize,
@@ -103,7 +245,7 @@ impl Output {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct ReadLine {
     input: String,
 }
@@ -160,7 +302,7 @@ pub enum SelectMenuAction {
     ToggleAll,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct SelectMenu {
     pub cursor: usize,
     pub scroll: usize, // index of the first line when scrolling
@@ -209,7 +351,7 @@ pub trait FilterEntry {
     fn fuzzy_matches(&self, pattern: &str) -> bool;
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Filter {
     has_focus: bool,
     readline: ReadLine,

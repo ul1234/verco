@@ -2,9 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{Backend, BackendResult, FileStatus, RevisionEntry, StatusInfo},
-    mode::{
-        Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine, SelectMenu, SelectMenuAction,
-    },
+    mode::*,
     platform::Key,
     ui::{Color, Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -12,11 +10,9 @@ use crate::{
 pub enum Response {
     Refresh(StatusInfo),
     Commit,
-    Diff(String),
-    Restore,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum WaitOperation {
     Refresh,
     Commit,
@@ -26,13 +22,13 @@ enum WaitOperation {
     ResolveTakingTheirs,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum State {
     Idle,
     Waiting(WaitOperation),
     CommitMessageInput,
     StashMessageInput,
-    ViewDiff,
+    //ViewDiff,
 }
 impl Default for State {
     fn default() -> Self {
@@ -66,7 +62,7 @@ impl SelectEntryDraw for RevisionEntry {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Mode {
     state: State,
     entries: Vec<RevisionEntry>,
@@ -75,7 +71,6 @@ pub struct Mode {
     filter: Filter,
     readline: ReadLine,
     from: ModeKind,
-    content: Option<Box<Mode>>,
 }
 impl Mode {
     fn get_selected_entries(&self) -> Vec<RevisionEntry> {
@@ -107,23 +102,7 @@ impl Mode {
 }
 
 impl ModeTrait for Mode {
-    fn save(&mut self) {
-        self.content = None;
-        let mode = self.clone();
-        self.content = Some(Box::new(mode));
-    }
-
-    fn restore(&mut self) {
-        match &mut self.content {
-            Some(mode) => {
-                mode.content = None;
-                *self = *mode.clone();
-            }
-            None => (),
-        }
-    }
-
-    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
+    fn on_enter(&mut self, ctx: &ModeContext, info: ModeChangeInfo) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -137,7 +116,7 @@ impl ModeTrait for Mode {
         request(ctx, |_| Ok(()));
     }
 
-    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
         let pending_input =
             matches!(self.state, State::CommitMessageInput | State::StashMessageInput) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
@@ -214,21 +193,17 @@ impl ModeTrait for Mode {
                         }
                         Key::Enter => {
                             if !self.entries.is_empty() {
-                                self.save();
-
-                                self.state = State::ViewDiff;
-                                self.output.set(String::new());
-                                self.filter.clear();
-
                                 let entries = self.get_selected_entries();
 
                                 let ctx = ctx.clone();
                                 thread::spawn(move || {
+                                    ctx.event_sender.send_mode_change(ModeKind::Diff, ModeChangeInfo::new(ModeKind::Status));
+
                                     let output = match ctx.backend.diff(None, &entries) {
                                         Ok(output) => output,
                                         Err(error) => error,
                                     };
-                                    ctx.event_sender.send_response(ModeResponse::Status(Response::Diff(output)));
+                                    ctx.event_sender.send_response(ModeResponse::Diff(diff::Response::Refresh(output)));
                                 });
                             }
                         }
@@ -245,23 +220,20 @@ impl ModeTrait for Mode {
                         self.remove_selected_entries();
 
                         let ctx = ctx.clone();
-                        thread::spawn(move || {
-                            ctx.event_sender.send_mode_change(ModeKind::Log);
-                            match ctx.backend.commit(&message, &entries) {
-                                Ok(()) => {
-                                    ctx.event_sender.send_response(ModeResponse::Status(Response::Commit));
-                                    ctx.event_sender.send_mode_refresh(ModeKind::Log);
-                                }
-                                Err(error) => {
-                                    ctx.event_sender.send_response(ModeResponse::Status(Response::Refresh(StatusInfo {
-                                        header: error,
-                                        entries: Vec::new(),
-                                    })))
-                                }
+                        thread::spawn(move || match ctx.backend.commit(&message, &entries) {
+                            Ok(()) => {
+                                ctx.event_sender.send_response(ModeResponse::Status(Response::Commit));
+                                ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Status));
+                            }
+                            Err(error) => {
+                                ctx.event_sender.send_response(ModeResponse::Status(Response::Refresh(StatusInfo {
+                                    header: error,
+                                    entries: Vec::new(),
+                                })))
                             }
                         });
                     } else if key.is_cancel() {
-                        self.on_enter(ctx, "");
+                        //self.on_enter(ctx, "");
                     }
                 }
                 State::StashMessageInput => {
@@ -275,21 +247,9 @@ impl ModeTrait for Mode {
 
                         request(ctx, move |b| b.stash(&message, &entries));
                     } else if key.is_cancel() {
-                        self.on_enter(ctx, "");
+                        //self.on_enter(ctx, "");
                     }
                 }
-                State::ViewDiff => match key {
-                    Key::Char('q') | Key::Left => {
-                        self.state = State::Waiting(WaitOperation::Refresh);
-                        self.output.set(String::new());
-
-                        let ctx = ctx.clone();
-                        thread::spawn(move || {
-                            ctx.event_sender.send_response(ModeResponse::Status(Response::Restore));
-                        });
-                    }
-                    _ => self.output.on_key(available_height, key),
-                },
             }
         }
 
@@ -299,13 +259,6 @@ impl ModeTrait for Mode {
     fn on_response(&mut self, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Status).unwrap();
         match response {
-            Response::Restore => {
-                self.restore();
-
-                if let State::Waiting(_) = self.state {
-                    self.state = State::Idle;
-                }
-            }
             Response::Refresh(info) => {
                 if let State::Waiting(_) = self.state {
                     self.state = State::Idle;
@@ -320,14 +273,6 @@ impl ModeTrait for Mode {
                 self.select.saturate_cursor(self.filter.visible_indices().len());
             }
             Response::Commit => self.state = State::Idle,
-            Response::Diff(mut output) => {
-                if let State::ViewDiff = self.state {
-                    if output.is_empty() {
-                        output.push('\n');
-                    }
-                    self.output.set(output);
-                }
-            }
         }
     }
 
@@ -335,7 +280,6 @@ impl ModeTrait for Mode {
         match self.state {
             State::Idle | State::CommitMessageInput | State::StashMessageInput => false,
             State::Waiting(_) => true,
-            State::ViewDiff => self.output.text().is_empty(),
         }
     }
 
@@ -349,7 +293,6 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::Discard) => "discard",
             State::Waiting(WaitOperation::ResolveTakingOurs) => "resolve taking ours",
             State::Waiting(WaitOperation::ResolveTakingTheirs) => "resolve taking theirs",
-            State::ViewDiff => "diff",
         };
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
@@ -359,12 +302,12 @@ impl ModeTrait for Mode {
             State::CommitMessageInput | State::StashMessageInput => {
                 ("", "[enter]submit [esc]cancel [ctrl+w]delete word [Home]delete all")
             }
-            State::ViewDiff => ("", "[arrows]move"),
         };
         (name, left_help, right_help)
     }
 
     fn draw(&self, drawer: &mut Drawer) {
+        log(format!("start to draw status: \n {:?}:\n", self.output.text()));
         let filter_line_count = drawer.filter(&self.filter);
         match self.state {
             State::Idle | State::Waiting(_) => {
@@ -401,9 +344,6 @@ impl ModeTrait for Mode {
             }
             State::CommitMessageInput => drawer.readline(&self.readline, "type in the commit message..."),
             State::StashMessageInput => drawer.readline(&self.readline, "type in the stash message..."),
-            State::ViewDiff => {
-                drawer.diff(&self.output);
-            }
         }
     }
 }

@@ -10,7 +10,7 @@ pub mod git;
 
 pub type BackendResult<T> = std::result::Result<T, String>;
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FileStatus {
     Modified,
     Added,
@@ -62,7 +62,7 @@ pub struct RevisionInfo {
     pub entries: Vec<RevisionEntry>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RevisionEntry {
     pub selected: bool,
     pub name: String,
@@ -98,7 +98,7 @@ impl FilterEntry for LogEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BranchEntry {
     pub name: String,
     pub checked_out: bool,
@@ -109,7 +109,7 @@ impl FilterEntry for BranchEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TagEntry {
     pub name: String,
 }
@@ -119,7 +119,7 @@ impl FilterEntry for TagEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StashEntry {
     pub id: usize,
     pub branch: String,

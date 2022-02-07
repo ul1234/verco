@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     backend::Backend,
-    mode::{self, ModeContext, ModeKind, ModeResponse, ModeTrait},
+    mode::*,
     platform::{Key, Platform, PlatformEventReader},
     ui::Drawer,
 };
@@ -16,8 +16,8 @@ enum Event {
     Key(Key),
     Resize(u16, u16),
     Response(ModeResponse),
-    ModeChange(ModeKind),
-    ModeRefresh(ModeKind),
+    ModeChange(ModeKind, ModeChangeInfo),
+    ModeRevert,
 }
 
 #[derive(Clone)]
@@ -27,73 +27,27 @@ impl EventSender {
         self.0.send(Event::Response(result)).unwrap();
     }
 
-    pub fn send_mode_change(&self, mode: ModeKind) {
-        self.0.send(Event::ModeChange(mode)).unwrap();
+    pub fn send_mode_change(&self, mode: ModeKind, info: ModeChangeInfo) {
+        self.0.send(Event::ModeChange(mode, info)).unwrap();
     }
 
-    pub fn send_mode_refresh(&self, mode: ModeKind) {
-        self.0.send(Event::ModeRefresh(mode)).unwrap();
+    pub fn send_mode_revert(&self) {
+        self.0.send(Event::ModeRevert).unwrap();
     }
 }
 
 #[derive(Default)]
 struct Application {
-    current_mode_kind: ModeKind,
-
-    status_mode: mode::status::Mode,
-    log_mode: mode::log::Mode,
-    revision_details_mode: mode::revision_details::Mode,
-    branches_mode: mode::branches::Mode,
-    tags_mode: mode::tags::Mode,
-    stash_mode: mode::stash::Mode,
-
+    mode: ModeBuf,
     spinner_state: u8,
 }
 impl Application {
-    fn current_mode(&mut self) -> &mut dyn ModeTrait {
-        match &self.current_mode_kind {
-            ModeKind::Status => &mut self.status_mode,
-            ModeKind::Log => &mut self.log_mode,
-            ModeKind::RevisionDetails(_) => &mut self.revision_details_mode,
-            ModeKind::Branches => &mut self.branches_mode,
-            ModeKind::Tags => &mut self.tags_mode,
-            ModeKind::Stash => &mut self.stash_mode,
-        }
-    }
-
-    fn response_mode(&mut self, response: &ModeResponse) -> &mut dyn ModeTrait {
-        match response {
-            ModeResponse::Status(_) => &mut self.status_mode,
-            ModeResponse::Log(_) => &mut self.log_mode,
-            ModeResponse::RevisionDetails(_) => &mut self.revision_details_mode,
-            ModeResponse::Branches(_) => &mut self.branches_mode,
-            ModeResponse::Tags(_) => &mut self.tags_mode,
-            ModeResponse::Stash(_) => &mut self.stash_mode,
-        }
-    }
-
-    fn revision(&self) -> &str {
-        match &self.current_mode_kind {
-            ModeKind::RevisionDetails(revision) => revision,
-            _ => "",
-        }
-    }
-
-    pub fn enter_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind) {
-        self.current_mode_kind = mode_kind;
-        let revision = self.revision().to_owned();
-        self.current_mode().on_enter(ctx, &revision);
-    }
-
-    pub fn refresh_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind) {
-        if std::mem::discriminant(&self.current_mode_kind) == std::mem::discriminant(&mode_kind) {
-            self.enter_mode(ctx, mode_kind);
-        }
+    pub fn current_mode(&mut self) -> &mut dyn ModeTrait {
+        self.mode.mode()
     }
 
     pub fn on_key(&mut self, ctx: &ModeContext, key: Key) -> bool {
-        let revision = self.revision().to_owned();
-        let status = self.current_mode().on_key(ctx, key, &revision);
+        let status = self.current_mode().on_key(ctx, key);
 
         if !status.pending_input {
             if key.is_exit() {
@@ -110,7 +64,7 @@ impl Application {
             };
 
             if let Some(target_mode_kind) = target_mode_kind {
-                self.enter_mode(ctx, target_mode_kind);
+                self.mode.enter_mode(ctx, target_mode_kind, ModeChangeInfo::new(self.mode.mode_kind()));
             }
         }
 
@@ -118,7 +72,9 @@ impl Application {
     }
 
     pub fn on_response(&mut self, response: ModeResponse) {
-        self.response_mode(&response).on_response(response);
+        if response.mode_kind() == self.mode.mode_kind() {
+            self.current_mode().on_response(response);
+        }
     }
 
     pub fn is_waiting_response(&mut self) -> bool {
@@ -138,7 +94,12 @@ impl Application {
     }
 
     pub fn draw_body(&mut self, drawer: &mut Drawer) {
-        self.current_mode().draw(drawer);
+        log(format!("draw body, mode:\n, {:?}\n", self.mode));
+
+        //self.current_mode().draw(drawer);
+        let mode = self.current_mode();
+
+        mode.draw(drawer);
         drawer.clear_to_bottom();
     }
 }
@@ -177,7 +138,7 @@ pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>
     });
 
     let mut application = Application::default();
-    application.enter_mode(&ctx, ModeKind::default());
+    application.mode.enter_mode(&ctx, ModeKind::default(), ModeChangeInfo::new(ModeKind::default()));
 
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
@@ -204,17 +165,18 @@ pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>
                 ctx.viewport_size = (width, height);
             }
             Ok(Event::Response(response)) => application.on_response(response),
-            Ok(Event::ModeChange(mode)) => application.enter_mode(&ctx, mode),
-            Ok(Event::ModeRefresh(mode)) => application.refresh_mode(&ctx, mode),
+            Ok(Event::ModeChange(mode, info)) => application.mode.enter_mode(&ctx, mode, info),
+            Ok(Event::ModeRevert) => application.mode.revert_mode(&ctx),
             Err(mpsc::RecvTimeoutError::Timeout) => draw_body = false,
             Err(mpsc::RecvTimeoutError::Disconnected) => break,
         }
 
         let mut drawer = Drawer::new(stdout_buf, ctx.viewport_size);
         application.draw_header(&mut drawer);
-        if draw_body {
-            application.draw_body(&mut drawer);
-        }
+        application.draw_body(&mut drawer);
+        //if draw_body {
+
+        //}
         stdout_buf = drawer.take_buf();
 
         use io::Write;

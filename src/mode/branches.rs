@@ -2,7 +2,7 @@ use std::thread;
 
 use crate::{
     backend::{Backend, BackendResult, BranchEntry},
-    mode::{Filter, ModeContext, ModeKind, ModeResponse, ModeStatus, ModeTrait, Output, ReadLine, SelectMenu},
+    mode::*,
     platform::Key,
     ui::{Drawer, SelectEntryDraw, RESERVED_LINES_COUNT},
 };
@@ -13,7 +13,7 @@ pub enum Response {
     Merge,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum WaitOperation {
     Refresh,
     New,
@@ -21,7 +21,7 @@ enum WaitOperation {
     Merge,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum State {
     Idle,
     Waiting(WaitOperation),
@@ -41,7 +41,7 @@ impl SelectEntryDraw for BranchEntry {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Mode {
     state: State,
     entries: Vec<BranchEntry>,
@@ -50,26 +50,9 @@ pub struct Mode {
     filter: Filter,
     readline: ReadLine,
     from: ModeKind,
-    content: Option<Box<Mode>>,
 }
 impl ModeTrait for Mode {
-    fn save(&mut self) {
-        self.content = None;
-        let mode = self.clone();
-        self.content = Some(Box::new(mode));
-    }
-
-    fn restore(&mut self) {
-        match &mut self.content {
-            Some(mode) => {
-                mode.content = None;
-                *self = *mode.clone();
-            }
-            None => (),
-        }
-    }
-
-    fn on_enter(&mut self, ctx: &ModeContext, _revision: &str) {
+    fn on_enter(&mut self, ctx: &ModeContext, _info: ModeChangeInfo) {
         if let State::Waiting(_) = self.state {
             return;
         }
@@ -83,7 +66,7 @@ impl ModeTrait for Mode {
         request(ctx, |_| Ok(()));
     }
 
-    fn on_key(&mut self, ctx: &ModeContext, key: Key, _revision: &str) -> ModeStatus {
+    fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
         let pending_input = matches!(self.state, State::NewNameInput) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
@@ -108,16 +91,16 @@ impl ModeTrait for Mode {
                                 let entry = &self.entries[current_entry_index];
                                 let name = entry.name.clone();
                                 let ctx = ctx.clone();
-                                thread::spawn(move || {
-                                    ctx.event_sender.send_mode_change(ModeKind::Log);
-                                    match ctx.backend.checkout(&name) {
-                                        Ok(()) => {
-                                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Checkout));
-                                            ctx.event_sender.send_mode_refresh(ModeKind::Log);
-                                        }
-                                        Err(error) => ctx
-                                            .event_sender
-                                            .send_response(ModeResponse::Branches(Response::Refresh(Err(error)))),
+                                thread::spawn(move || match ctx.backend.checkout(&name) {
+                                    Ok(()) => {
+                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Checkout));
+                                        ctx.event_sender
+                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                                    }
+                                    Err(error) => {
+                                        ctx.event_sender
+                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
                                     }
                                 });
                             }
@@ -150,16 +133,16 @@ impl ModeTrait for Mode {
 
                                 let name = entry.name.clone();
                                 let ctx = ctx.clone();
-                                thread::spawn(move || {
-                                    ctx.event_sender.send_mode_change(ModeKind::Log);
-                                    match ctx.backend.merge(&name) {
-                                        Ok(()) => {
-                                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Merge));
-                                            ctx.event_sender.send_mode_refresh(ModeKind::Log);
-                                        }
-                                        Err(error) => ctx
-                                            .event_sender
-                                            .send_response(ModeResponse::Branches(Response::Refresh(Err(error)))),
+                                thread::spawn(move || match ctx.backend.merge(&name) {
+                                    Ok(()) => {
+                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Merge));
+                                        ctx.event_sender
+                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                                    }
+                                    Err(error) => {
+                                        ctx.event_sender
+                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
                                     }
                                 });
                             }
@@ -175,7 +158,7 @@ impl ModeTrait for Mode {
                         let name = self.readline.input().to_string();
                         request(ctx, move |b| b.new_branch(&name));
                     } else if key.is_cancel() {
-                        self.on_enter(ctx, "");
+                        //self.on_enter(ctx, "");
                     }
                 }
             }
