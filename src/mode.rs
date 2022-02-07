@@ -120,16 +120,17 @@ impl ModeBuf {
 
     pub fn enter_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind, info: ModeChangeInfo) {
         if self.mode.mode_kind() != mode_kind {
-            log(format!("before enter to {:?}:\n {:?}\n", mode_kind, self.mode));
+            log(format!("before enter mode to {:?}:\n {:?}\n", mode_kind, self.mode));
             self.history.push(self.mode.clone());
         }
         self.mode = Mode::default_from_mode_kind(mode_kind);
         self.mode().on_enter(ctx, info);
     }
 
-    pub fn revert_mode(&mut self, ctx: &ModeContext) {
+    pub fn revert_mode(&mut self, _ctx: &ModeContext) {
+        log(format!("revert: \n "));
         if let Some(mode) = self.history.pop() {
-            log(format!("after pop: \n {:?}\n", mode));
+            log(format!("revert to mode: \n {:?}\n", mode));
             self.mode = mode;
         }
     }
@@ -175,7 +176,7 @@ pub trait ModeTrait {
     fn on_enter(&mut self, ctx: &ModeContext, info: ModeChangeInfo);
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus;
     fn is_waiting_response(&self) -> bool;
-    fn on_response(&mut self, response: ModeResponse);
+    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse);
     fn header(&self) -> (&str, &str, &str);
     fn draw(&self, drawer: &mut Drawer);
 }
@@ -188,9 +189,9 @@ pub struct ModeContext {
 }
 
 pub fn log(info: String) {
-    let mut file = fs::OpenOptions::new().write(true).append(true).open("test.txt").expect("log failed");
+    //let mut file = fs::OpenOptions::new().write(true).append(true).open("test.txt").expect("log failed");
 
-    file.write_all(info.as_bytes()).unwrap();
+    //file.write_all(info.as_bytes()).unwrap();
 }
 
 pub struct ModeStatus {

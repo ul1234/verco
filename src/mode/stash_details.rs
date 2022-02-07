@@ -150,7 +150,7 @@ impl ModeTrait for Mode {
         ModeStatus { pending_input }
     }
 
-    fn on_response(&mut self, response: ModeResponse) {
+    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         let _response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
     }
 

@@ -27,7 +27,7 @@ use winapi::{
     },
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Key {
     Backspace,
     Enter,

@@ -108,8 +108,6 @@ impl ModeTrait for Mode {
                                 let entries = self.get_selected_entries();
                                 let ctx = ctx.clone();
                                 let revision = self.revision.clone();
-                                log(format!("revision: \n, {}\n", revision));
-                                log(format!("entries: \n, {:?}\n", entries));
 
                                 thread::spawn(move || {
                                     ctx.event_sender
@@ -119,7 +117,6 @@ impl ModeTrait for Mode {
                                         Ok(output) => output,
                                         Err(error) => error,
                                     };
-                                    log(format!("output: \n, {}\n", output));
                                     ctx.event_sender.send_response(ModeResponse::Diff(diff::Response::Refresh(output)));
                                 });
                             }
@@ -137,7 +134,7 @@ impl ModeTrait for Mode {
         ModeStatus { pending_input }
     }
 
-    fn on_response(&mut self, response: ModeResponse) {
+    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
         match response {
             Response::Info(info) => {

@@ -21,7 +21,7 @@ enum Event {
 }
 
 #[derive(Clone)]
-pub struct EventSender(mpsc::SyncSender<Event>);
+pub struct EventSender(mpsc::Sender<Event>);
 impl EventSender {
     pub fn send_response(&self, result: ModeResponse) {
         self.0.send(Event::Response(result)).unwrap();
@@ -71,9 +71,12 @@ impl Application {
         true
     }
 
-    pub fn on_response(&mut self, response: ModeResponse) {
+    pub fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         if response.mode_kind() == self.mode.mode_kind() {
-            self.current_mode().on_response(response);
+            log(format!("kind same, {:?}\n", self.mode.mode_kind()));
+            self.current_mode().on_response(ctx, response);
+        } else {
+            log(format!("kind different, {:?}\n", self.mode.mode_kind()));
         }
     }
 
@@ -104,7 +107,7 @@ impl Application {
     }
 }
 
-fn terminal_event_loop(mut event_reader: PlatformEventReader, sender: mpsc::SyncSender<Event>) {
+fn terminal_event_loop(mut event_reader: PlatformEventReader, sender: mpsc::Sender<Event>) {
     event_reader.init();
 
     let mut keys = Vec::new();
@@ -128,7 +131,8 @@ fn terminal_event_loop(mut event_reader: PlatformEventReader, sender: mpsc::Sync
 }
 
 pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>) {
-    let (event_sender, event_receiver) = mpsc::sync_channel(1);
+    //let (event_sender, event_receiver) = mpsc::sync_channel(1);
+    let (event_sender, event_receiver) = mpsc::channel();
 
     let mut ctx =
         ModeContext { backend, event_sender: EventSender(event_sender.clone()), viewport_size: Platform::terminal_size() };
@@ -164,7 +168,7 @@ pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>
             Ok(Event::Resize(width, height)) => {
                 ctx.viewport_size = (width, height);
             }
-            Ok(Event::Response(response)) => application.on_response(response),
+            Ok(Event::Response(response)) => application.on_response(&ctx, response),
             Ok(Event::ModeChange(mode, info)) => application.mode.enter_mode(&ctx, mode, info),
             Ok(Event::ModeRevert) => application.mode.revert_mode(&ctx),
             Err(mpsc::RecvTimeoutError::Timeout) => draw_body = false,

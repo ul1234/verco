@@ -58,7 +58,7 @@ impl ModeTrait for Mode {
         ModeStatus { pending_input: false }
     }
 
-    fn on_response(&mut self, response: ModeResponse) {
+    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Diff).unwrap();
         match response {
             Response::Refresh(info) => {
@@ -90,7 +90,7 @@ impl ModeTrait for Mode {
     }
 
     fn draw(&self, drawer: &mut Drawer) {
-        log(format!("start to draw diff: \n"));
+        //log(format!("start to draw diff: \n"));
         drawer.diff(&self.output);
     }
 }
