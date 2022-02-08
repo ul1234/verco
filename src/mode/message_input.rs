@@ -7,7 +7,7 @@ pub enum Response {}
 pub struct OnSubmit(fn(ctx: &ModeContext, message: String));
 impl Default for OnSubmit {
     fn default() -> Self {
-        Self(|ctx: &ModeContext, message: String| {})
+        Self(|_ctx: &ModeContext, _message: String| {})
     }
 }
 
@@ -23,10 +23,7 @@ pub struct ModeInfo {
 }
 impl ModeInfo {
     pub fn new(placeholder: String, on_submit: fn(ctx: &ModeContext, message: String)) -> Self {
-        Self {
-            placeholder,
-            on_submit: OnSubmit(on_submit),
-        }
+        Self { placeholder, on_submit: OnSubmit(on_submit) }
     }
 }
 

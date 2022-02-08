@@ -1,5 +1,5 @@
-use std::fs;
-use std::io::Write;
+//use std::fs;
+//use std::io::Write;
 use std::sync::Arc;
 
 use crate::{application::EventSender, backend::Backend, platform::Key, ui::Drawer};
@@ -142,6 +142,7 @@ pub struct ModeChangeInfo {
 }
 pub enum ModeInfo {
     RevisionDetails(String),
+    StashDetails(usize),
     MessageInput(message_input::ModeInfo),
 }
 
@@ -152,6 +153,10 @@ impl ModeChangeInfo {
 
     pub fn revision(from: ModeKind, revision: String) -> Self {
         Self { from, info: Some(ModeInfo::RevisionDetails(revision)) }
+    }
+
+    pub fn stash(from: ModeKind, stash_id: usize) -> Self {
+        Self { from, info: Some(ModeInfo::StashDetails(stash_id)) }
     }
 
     pub fn message_input(from: ModeKind, placeholder: String, on_submit: fn(&ModeContext, String)) -> Self {
@@ -193,7 +198,7 @@ pub struct ModeContext {
     pub viewport_size: (u16, u16),
 }
 
-pub fn log(info: String) {
+pub fn log(_info: String) {
     //let mut file = fs::OpenOptions::new().write(true).append(true).open("test.txt").expect("log failed");
 
     //file.write_all(info.as_bytes()).unwrap();

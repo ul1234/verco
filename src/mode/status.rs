@@ -11,6 +11,7 @@ pub enum Response {
     Idle,
     Refresh(StatusInfo),
     Commit(String),
+    Stash(String),
 }
 
 #[derive(Clone, Debug)]
@@ -27,8 +28,6 @@ enum WaitOperation {
 enum State {
     Idle,
     Waiting(WaitOperation),
-    StashMessageInput,
-    //ViewDiff,
 }
 impl Default for State {
     fn default() -> Self {
@@ -118,7 +117,7 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let pending_input = matches!(self.state, State::StashMessageInput) || self.filter.has_focus();
+        let pending_input = self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
         if self.filter.has_focus() {
@@ -154,7 +153,7 @@ impl ModeTrait for Mode {
                             if !self.entries.is_empty() {
                                 let placeholder = "type in the commit message...".to_owned();
                                 let on_submit = |ctx: &ModeContext, message: String| {
-                                    ctx.event_sender.send_response(ModeResponse::Status(status::Response::Commit(message)))
+                                    ctx.event_sender.send_response(ModeResponse::Status(Response::Commit(message)))
                                 };
                                 ctx.event_sender.send_mode_change(
                                     ModeKind::MessageInput,
@@ -189,8 +188,14 @@ impl ModeTrait for Mode {
                         }
                         Key::Ctrl('s') => {
                             if !self.entries.is_empty() {
-                                ctx.event_sender
-                                    .send_mode_change(ModeKind::MessageInput, ModeChangeInfo::new(ModeKind::Status));
+                                let placeholder = "type in the stash message...".to_owned();
+                                let on_submit = |ctx: &ModeContext, message: String| {
+                                    ctx.event_sender.send_response(ModeResponse::Status(Response::Stash(message)))
+                                };
+                                ctx.event_sender.send_mode_change(
+                                    ModeKind::MessageInput,
+                                    ModeChangeInfo::message_input(ModeKind::Status, placeholder, on_submit),
+                                );
                             }
                         }
                         Key::Enter => {
@@ -210,19 +215,6 @@ impl ModeTrait for Mode {
                             }
                         }
                         _ => (),
-                    }
-                }
-                State::StashMessageInput => {
-                    self.readline.on_key(key);
-                    if key.is_submit() {
-                        self.state = State::Waiting(WaitOperation::Stash);
-
-                        let message = self.readline.input().to_string();
-                        let entries = self.get_selected_entries();
-                        self.remove_selected_entries();
-
-                        request(ctx, move |b| b.stash(&message, &entries));
-                    } else if key.is_cancel() {
                     }
                 }
             }
@@ -268,6 +260,14 @@ impl ModeTrait for Mode {
                     }))),
                 });
             }
+            Response::Stash(message) => {
+                self.state = State::Waiting(WaitOperation::Stash);
+
+                let entries = self.get_selected_entries();
+                self.remove_selected_entries();
+
+                request(ctx, move |b| b.stash(&message, &entries));
+            }
             Response::Idle => {
                 log(format!("status to Idle\n"));
                 self.state = State::Idle;
@@ -277,7 +277,7 @@ impl ModeTrait for Mode {
 
     fn is_waiting_response(&self) -> bool {
         match self.state {
-            State::Idle | State::StashMessageInput => false,
+            State::Idle => false,
             State::Waiting(_) => true,
         }
     }
@@ -285,7 +285,6 @@ impl ModeTrait for Mode {
     fn header(&self) -> (&str, &str, &str) {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "status",
-            State::StashMessageInput => "stash message",
             State::Waiting(WaitOperation::Commit) => "commit",
             State::Waiting(WaitOperation::Stash) => "stash",
             State::Waiting(WaitOperation::Discard) => "discard",
@@ -297,7 +296,6 @@ impl ModeTrait for Mode {
                 "[c]commit [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
                 "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
-            State::StashMessageInput => ("", "[enter]submit [esc]cancel [ctrl+w]delete word "),
         };
         (name, left_help, right_help)
     }
@@ -338,7 +336,6 @@ impl ModeTrait for Mode {
                     }
                 }
             }
-            State::StashMessageInput => drawer.readline(&self.readline, "type in the stash message..."),
         }
     }
 }

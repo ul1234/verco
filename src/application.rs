@@ -99,10 +99,7 @@ impl Application {
     pub fn draw_body(&mut self, drawer: &mut Drawer) {
         log(format!("draw body, mode:\n, {:?}\n", self.mode));
 
-        //self.current_mode().draw(drawer);
-        let mode = self.current_mode();
-
-        mode.draw(drawer);
+        self.current_mode().draw(drawer);
         drawer.clear_to_bottom();
     }
 }

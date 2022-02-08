@@ -9,8 +9,6 @@ use crate::{
 
 pub enum Response {
     Refresh(BackendResult<Vec<StashEntry>>),
-    Details(String),
-    Diff(String),
 }
 
 #[derive(Clone, Debug)]
@@ -23,8 +21,6 @@ enum WaitOperation {
 enum State {
     Idle,
     Waiting(WaitOperation),
-    ViewDetails(usize),
-    ViewDiff,
 }
 impl Default for State {
     fn default() -> Self {
@@ -61,7 +57,6 @@ pub struct Mode {
     output: Output,
     select: SelectMenu,
     filter: Filter,
-    from: ModeKind,
 }
 
 impl ModeTrait for Mode {
@@ -102,15 +97,9 @@ impl ModeTrait for Mode {
                             if let Some(current_entry_index) = current_entry_index {
                                 let entry = &self.entries[current_entry_index];
                                 let id = entry.id;
-                                self.state = State::ViewDetails(id);
 
-                                let ctx = ctx.clone();
-                                thread::spawn(move || match ctx.backend.stash_show(id) {
-                                    Ok(info) => ctx.event_sender.send_response(ModeResponse::Stash(Response::Details(info))),
-                                    Err(error) => {
-                                        ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(Err(error))))
-                                    }
-                                });
+                                ctx.event_sender
+                                    .send_mode_change(ModeKind::StashDetails, ModeChangeInfo::stash(ModeKind::Log, id));
                             }
                         }
                         Key::Char('p') => {
@@ -142,38 +131,13 @@ impl ModeTrait for Mode {
                         _ => (),
                     }
                 }
-                State::ViewDetails(id) => match key {
-                    Key::Enter => {
-                        self.state = State::ViewDiff;
-                        self.output.set(String::new());
-
-                        let ctx = ctx.clone();
-                        thread::spawn(move || match ctx.backend.stash_diff(id) {
-                            Ok(info) => ctx.event_sender.send_response(ModeResponse::Stash(Response::Diff(info))),
-                            Err(error) => ctx.event_sender.send_response(ModeResponse::Stash(Response::Refresh(Err(error)))),
-                        });
-                    }
-                    _ => self.output.on_key(available_height, key),
-                },
-                State::ViewDiff => match key {
-                    Key::Char('q') | Key::Left => {
-                        self.state = State::Waiting(WaitOperation::Refresh);
-                        self.output.set(String::new());
-
-                        let ctx = ctx.clone();
-                        thread::spawn(move || {
-                            //ctx.event_sender.send_response(ModeResponse::Stash(Response::Restore));
-                        });
-                    }
-                    _ => self.output.on_key(available_height, key),
-                },
             }
         }
 
         ModeStatus { pending_input }
     }
 
-    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
+    fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Stash).unwrap();
         match response {
             Response::Refresh(result) => {
@@ -193,12 +157,6 @@ impl ModeTrait for Mode {
                 self.filter.filter(self.entries.iter());
                 self.select.saturate_cursor(self.filter.visible_indices().len());
             }
-            Response::Details(mut info) | Response::Diff(mut info) => {
-                if info.is_empty() {
-                    info.push('\n');
-                }
-                self.output.set(info);
-            }
         }
     }
 
@@ -206,7 +164,6 @@ impl ModeTrait for Mode {
         match self.state {
             State::Idle => false,
             State::Waiting(_) => true,
-            State::ViewDetails(_) | State::ViewDiff => self.output.text().is_empty(),
         }
     }
 
@@ -214,15 +171,9 @@ impl ModeTrait for Mode {
         let name = match self.state {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "stash list",
             State::Waiting(WaitOperation::Discard) => "discard",
-            State::ViewDetails(_) => "stash details",
-            State::ViewDiff => "diff",
         };
 
-        let (left_help, right_help) = match self.state {
-            State::Idle | State::Waiting(_) => ("[p]pop [enter]details [D]discard", "[arrows]move [ctrl+f]filter"),
-            State::ViewDetails(_) => ("[enter]details", "[arrows]move"),
-            State::ViewDiff => ("", "[arrows]move"),
-        };
+        let (left_help, right_help) = ("[p]pop [enter]details [D]discard", "[arrows]move [ctrl+f]filter");
 
         (name, left_help, right_help)
     }
@@ -247,12 +198,6 @@ impl ModeTrait for Mode {
                 } else {
                     drawer.output(&self.output);
                 }
-            }
-            State::ViewDetails(_) => {
-                drawer.stash_details(&self.output);
-            }
-            State::ViewDiff => {
-                drawer.diff(&self.output);
             }
         }
     }

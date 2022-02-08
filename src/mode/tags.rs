@@ -46,7 +46,6 @@ pub struct Mode {
     select: SelectMenu,
     filter: Filter,
     readline: ReadLine,
-    from: ModeKind,
 }
 impl ModeTrait for Mode {
     fn on_enter(&mut self, ctx: &ModeContext, _info: ModeChangeInfo) {
@@ -137,7 +136,7 @@ impl ModeTrait for Mode {
         ModeStatus { pending_input }
     }
 
-    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
+    fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Tags).unwrap();
         match response {
             Response::Refresh(result) => {

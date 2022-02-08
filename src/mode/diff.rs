@@ -37,11 +37,10 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
-
         match self.state {
             State::Idle => {
                 if self.output.line_count() > 1 {
+                    let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
                     self.output.on_key(available_height, key);
                 }
 
@@ -58,7 +57,7 @@ impl ModeTrait for Mode {
         ModeStatus { pending_input: false }
     }
 
-    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
+    fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Diff).unwrap();
         match response {
             Response::Refresh(info) => {

@@ -121,9 +121,7 @@ impl ModeTrait for Mode {
                                 });
                             }
                         }
-                        Key::Char('q') | Key::Left => {
-                            ctx.event_sender.send_mode_revert();
-                        }
+                        Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
                         _ => (),
                     }
                 }
@@ -134,7 +132,7 @@ impl ModeTrait for Mode {
         ModeStatus { pending_input }
     }
 
-    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
+    fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::RevisionDetails).unwrap();
         match response {
             Response::Info(info) => {
