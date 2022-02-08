@@ -224,8 +224,11 @@ impl ModeTrait for Mode {
                     }
                     Key::Char('P') => {
                         self.state = State::Waiting(WaitOperation::Push);
-                        //request(ctx, Backend::push);
-                        request(ctx, Backend::push_gerrit); // use push to gerrit
+                        request(ctx, Backend::push);
+                    }
+                    Key::Char('g') => {
+                        self.state = State::Waiting(WaitOperation::Push);
+                        request(ctx, Backend::push_gerrit); // push to gerrit
                     }
                     Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
                     _ => (),
@@ -282,7 +285,7 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::Push) => "push",
         };
 
-        let left_help = "[c]checkout [enter]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
+        let left_help = "[c]checkout [enter]details [f]fetch [p]pull [P]push [g]gerrit [r]reset [R]reset to remote";
         let right_help = "[tab]full message [Left]back [arrows]move [ctrl+f]filter";
         (name, left_help, right_help)
     }
