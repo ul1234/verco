@@ -9,7 +9,7 @@ use crate::{
 
 pub enum Response {
     Refresh(BackendResult<Vec<BranchEntry>>),
-    Checkout,
+    Checkout(usize),
     Merge,
 }
 
@@ -19,6 +19,7 @@ enum WaitOperation {
     New,
     Delete,
     Merge,
+    Checkout,
 }
 
 #[derive(Clone, Debug)]
@@ -50,6 +51,17 @@ pub struct Mode {
     filter: Filter,
     readline: ReadLine,
 }
+
+impl Mode {
+    fn set_checkout(&mut self, entry_index: usize) {
+        for entry in &mut self.entries {
+            entry.checked_out = false;
+        }
+
+        self.entries[entry_index].checked_out = true;
+    }
+}
+
 impl ModeTrait for Mode {
     fn on_enter(&mut self, ctx: &ModeContext, _info: ModeChangeInfo) {
         if let State::Waiting(_) = self.state {
@@ -90,16 +102,26 @@ impl ModeTrait for Mode {
                                 let entry = &self.entries[current_entry_index];
                                 let name = entry.name.clone();
                                 let ctx = ctx.clone();
-                                thread::spawn(move || match ctx.backend.checkout(&name) {
-                                    Ok(()) => {
-                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Checkout));
-                                        ctx.event_sender
-                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
-                                    }
-                                    Err(error) => {
-                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
-                                    }
-                                });
+
+                                if entry.checked_out {
+                                    ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                                } else {
+                                    self.state = State::Waiting(WaitOperation::Checkout);
+
+                                    thread::spawn(move || match ctx.backend.checkout(&name) {
+                                        Ok(()) => {
+                                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Checkout(
+                                                current_entry_index,
+                                            )));
+                                            ctx.event_sender
+                                                .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                                        }
+                                        Err(error) => {
+                                            ctx.event_sender
+                                                .send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
+                                        }
+                                    });
+                                }
                             }
                         }
                         Key::Char('n') => {
@@ -190,7 +212,11 @@ impl ModeTrait for Mode {
                     }
                 }
             }
-            Response::Checkout | Response::Merge => self.state = State::Idle,
+            Response::Checkout(entry_index) => {
+                self.state = State::Idle;
+                self.set_checkout(entry_index);
+            }
+            Response::Merge => self.state = State::Idle,
         }
     }
 
@@ -207,6 +233,7 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::New) => "new branch",
             State::Waiting(WaitOperation::Delete) => "delete branch",
             State::Waiting(WaitOperation::Merge) => "merge branch",
+            State::Waiting(WaitOperation::Checkout) => "checkout",
             State::NewNameInput => "new branch name",
         };
         let (left_help, right_help) = match self.state {

@@ -105,7 +105,7 @@ impl ModeTrait for Mode {
     }
 
     fn header(&self) -> (&str, &str, &str) {
-        ("stash details", "[enter]diff", "[arrows]move")
+        ("stash details", "[enter]diff", "[Left]back [arrows]move")
     }
 
     fn draw(&self, drawer: &mut Drawer) {

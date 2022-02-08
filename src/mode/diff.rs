@@ -80,11 +80,7 @@ impl ModeTrait for Mode {
 
     fn header(&self) -> (&str, &str, &str) {
         match self.state {
-            State::Idle | State::Waiting => (
-                "revision details",
-                "[enter]diff",
-                "[tab]full message [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
-            ),
+            State::Idle | State::Waiting => ("details", "", "[Left]back [arrows]move"),
         }
     }
 

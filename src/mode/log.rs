@@ -283,7 +283,7 @@ impl ModeTrait for Mode {
         };
 
         let left_help = "[c]checkout [enter]details [f]fetch [p]pull [P]push [r]reset [R]reset to remote";
-        let right_help = "[tab]full message [arrows]move [ctrl+f]filter";
+        let right_help = "[tab]full message [Left]back [arrows]move [ctrl+f]filter";
         (name, left_help, right_help)
     }
 

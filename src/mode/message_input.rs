@@ -65,7 +65,7 @@ impl ModeTrait for Mode {
     }
 
     fn header(&self) -> (&str, &str, &str) {
-        ("message input", "[enter]submit [Esc]cancel", "")
+        ("message input", "[enter]submit [Esc]cancel", "[Left]back")
     }
 
     fn draw(&self, drawer: &mut Drawer) {

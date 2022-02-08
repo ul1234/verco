@@ -163,7 +163,7 @@ impl ModeTrait for Mode {
             State::Idle | State::Waiting => (
                 "revision details",
                 "[enter]diff",
-                "[tab]full message [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
+                "[tab]full message [Left]back [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
         }
     }
