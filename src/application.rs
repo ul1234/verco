@@ -178,9 +178,9 @@ pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>
         let mut drawer = Drawer::new(stdout_buf, ctx.viewport_size);
         application.draw_header(&mut drawer);
         application.draw_body(&mut drawer);
-        //if draw_body {
+        if draw_body {
 
-        //}
+        }
         stdout_buf = drawer.take_buf();
 
         use io::Write;
