@@ -97,8 +97,6 @@ impl ModeTrait for Mode {
                                             .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
                                     }
                                     Err(error) => {
-                                        ctx.event_sender
-                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
                                         ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
                                     }
                                 });

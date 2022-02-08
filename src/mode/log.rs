@@ -227,6 +227,7 @@ impl ModeTrait for Mode {
                         //request(ctx, Backend::push);
                         request(ctx, Backend::push_gerrit); // use push to gerrit
                     }
+                    Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
                     _ => (),
                 }
             }

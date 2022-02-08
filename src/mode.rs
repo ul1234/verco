@@ -1,5 +1,6 @@
 //use std::fs;
 //use std::io::Write;
+use bounded_vec_deque::BoundedVecDeque;
 use std::sync::Arc;
 
 use crate::{application::EventSender, backend::Backend, platform::Key, ui::Drawer};
@@ -103,10 +104,16 @@ impl Mode {
     }
 }
 
-#[derive(Default, Debug)]
+pub const BOUNDED_VEC_DEQUE_MAX_LEN: usize = 5;
+#[derive(Debug)]
 pub struct ModeBuf {
     mode: Mode,
-    history: Vec<Mode>,
+    history: BoundedVecDeque<Mode>,
+}
+impl Default for ModeBuf {
+    fn default() -> Self {
+        Self { mode: Mode::default(), history: BoundedVecDeque::<Mode>::new(BOUNDED_VEC_DEQUE_MAX_LEN) }
+    }
 }
 
 impl ModeBuf {
@@ -121,7 +128,7 @@ impl ModeBuf {
     pub fn enter_mode(&mut self, ctx: &ModeContext, mode_kind: ModeKind, info: ModeChangeInfo) {
         if self.mode.mode_kind() != mode_kind {
             log(format!("before enter mode to {:?}:\n {:?}\n", mode_kind, self.mode));
-            self.history.push(self.mode.clone());
+            self.history.push_back(self.mode.clone());
         }
         self.mode = Mode::default_from_mode_kind(mode_kind);
         self.mode().on_enter(ctx, info);
@@ -129,7 +136,7 @@ impl ModeBuf {
 
     pub fn revert_mode(&mut self, _ctx: &ModeContext) {
         log(format!("revert: \n "));
-        if let Some(mode) = self.history.pop() {
+        if let Some(mode) = self.history.pop_back() {
             log(format!("revert to mode: \n {:?}\n", mode));
             self.mode = mode;
         }

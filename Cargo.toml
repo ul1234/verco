@@ -21,6 +21,9 @@ categories = ["command-line-utilities"]
 name = "verco"
 path = "src/main.rs"
 
+[dependencies]
+bounded-vec-deque = "0.1.1"
+
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
