@@ -112,13 +112,13 @@ impl ModeTrait for Mode {
         self.filter.filter(self.entries.iter());
         self.select.saturate_cursor(self.filter.visible_indices().len());
         self.readline.clear();
+        self.from = info.from;
 
         request(ctx, |_| Ok(()));
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let pending_input =
-            matches!(self.state, State::StashMessageInput) || self.filter.has_focus();
+        let pending_input = matches!(self.state, State::StashMessageInput) || self.filter.has_focus();
         let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
 
         if self.filter.has_focus() {
@@ -152,8 +152,14 @@ impl ModeTrait for Mode {
                         Key::Ctrl('f') => self.filter.enter(),
                         Key::Char('c') => {
                             if !self.entries.is_empty() {
-                                ctx.event_sender
-                                        .send_mode_change(ModeKind::MessageInput, ModeChangeInfo::new(ModeKind::Status));
+                                let placeholder = "type in the commit message...".to_owned();
+                                let on_submit = |ctx: &ModeContext, message: String| {
+                                    ctx.event_sender.send_response(ModeResponse::Status(status::Response::Commit(message)))
+                                };
+                                ctx.event_sender.send_mode_change(
+                                    ModeKind::MessageInput,
+                                    ModeChangeInfo::message_input(ModeKind::Status, placeholder, on_submit),
+                                );
                             }
                         }
                         Key::Char('D') => {
@@ -183,10 +189,8 @@ impl ModeTrait for Mode {
                         }
                         Key::Ctrl('s') => {
                             if !self.entries.is_empty() {
-                                self.state = State::StashMessageInput;
-                                self.output.set(String::new());
-                                self.filter.clear();
-                                self.readline.clear();
+                                ctx.event_sender
+                                    .send_mode_change(ModeKind::MessageInput, ModeChangeInfo::new(ModeKind::Status));
                             }
                         }
                         Key::Enter => {
@@ -258,12 +262,10 @@ impl ModeTrait for Mode {
                         ctx.event_sender.send_response(ModeResponse::Status(Response::Idle));
                         ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Status));
                     }
-                    Err(error) => {
-                        ctx.event_sender.send_response(ModeResponse::Status(Response::Refresh(StatusInfo {
-                            header: error,
-                            entries: Vec::new(),
-                        })))
-                    }
+                    Err(error) => ctx.event_sender.send_response(ModeResponse::Status(Response::Refresh(StatusInfo {
+                        header: error,
+                        entries: Vec::new(),
+                    }))),
                 });
             }
             Response::Idle => {
@@ -295,9 +297,7 @@ impl ModeTrait for Mode {
                 "[c]commit [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
                 "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
-            State::StashMessageInput => {
-                ("", "[enter]submit [esc]cancel [ctrl+w]delete word ")
-            }
+            State::StashMessageInput => ("", "[enter]submit [esc]cancel [ctrl+w]delete word "),
         };
         (name, left_help, right_help)
     }

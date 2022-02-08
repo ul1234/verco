@@ -178,7 +178,7 @@ impl ModeTrait for Mode {
                     let entry = &self.entries[current_entry_index];
                     ctx.event_sender.send_mode_change(
                         ModeKind::RevisionDetails,
-                        ModeChangeInfo::new_revision(ModeKind::Log, entry.hash.clone()),
+                        ModeChangeInfo::revision(ModeKind::Log, entry.hash.clone()),
                     );
                 }
             } else if let Key::Tab = key {

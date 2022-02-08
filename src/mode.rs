@@ -23,7 +23,7 @@ pub enum ModeResponse {
     Stash(stash::Response),
     Diff(diff::Response),
     StashDetails(stash_details::Response),
-    MessageInput(message_input::Response),
+    _MessageInput(message_input::Response),
 }
 impl ModeResponse {
     pub fn mode_kind(&self) -> ModeKind {
@@ -36,7 +36,7 @@ impl ModeResponse {
             ModeResponse::Stash(_) => ModeKind::Stash,
             ModeResponse::Diff(_) => ModeKind::Diff,
             ModeResponse::StashDetails(_) => ModeKind::StashDetails,
-            ModeResponse::MessageInput(_) => ModeKind::MessageInput,
+            ModeResponse::_MessageInput(_) => ModeKind::MessageInput,
         }
     }
 }
@@ -140,18 +140,23 @@ pub struct ModeChangeInfo {
     from: ModeKind,
     info: Option<ModeInfo>,
 }
+pub enum ModeInfo {
+    RevisionDetails(String),
+    MessageInput(message_input::ModeInfo),
+}
+
 impl ModeChangeInfo {
     pub fn new(from: ModeKind) -> Self {
         Self { from, info: None }
     }
 
-    pub fn new_revision(from: ModeKind, revision: String) -> Self {
+    pub fn revision(from: ModeKind, revision: String) -> Self {
         Self { from, info: Some(ModeInfo::RevisionDetails(revision)) }
     }
-}
 
-pub enum ModeInfo {
-    RevisionDetails(String),
+    pub fn message_input(from: ModeKind, placeholder: String, on_submit: fn(&ModeContext, String)) -> Self {
+        Self { from, info: Some(ModeInfo::MessageInput(message_input::ModeInfo::new(placeholder, on_submit))) }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
