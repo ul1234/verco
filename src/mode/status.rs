@@ -245,7 +245,7 @@ impl ModeTrait for Mode {
                 let entries = self.get_selected_entries();
                 self.remove_selected_entries();
 
-                log(format!("commit message: \n {:?}:\n", message));
+                //log(format!("commit message: \n {:?}:\n", message));
 
                 let ctx = ctx.clone();
                 thread::spawn(move || match ctx.backend.commit(&message, &entries) {
@@ -269,7 +269,6 @@ impl ModeTrait for Mode {
                 request(ctx, move |b| b.stash(&message, &entries));
             }
             Response::Idle => {
-                log(format!("status to Idle\n"));
                 self.state = State::Idle;
             }
         }

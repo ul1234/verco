@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use crate::mode::log;
+
 use super::{
     Backend, BackendResult, BranchEntry, FileStatus, LogEntry, Process, RevisionEntry, RevisionInfo, StashEntry, StatusInfo,
     TagEntry,
@@ -251,14 +253,22 @@ impl Backend for Git {
     }
 
     fn stash(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()> {
+        //log(format!("stash message: \n {:?}:\n", message));
+        //log(format!("stash entries: \n {:?}:\n", entries));
+
         if entries.is_empty() {
             Process::spawn("git", &["stash", "save", message])?.wait()?;
         } else {
-            let mut args = vec!["stash", "save", message, "--"];
+            let mut args = if message.is_empty() {
+                vec!["stash", "push", "--"]
+            } else {
+                vec!["stash", "push", "-m", message, "--"]
+            };
             for entry in entries {
                 args.push(&entry.name);
             }
 
+            //log(format!("stash args: \n {:?}:\n", args));
             Process::spawn("git", &args)?.wait()?;
         }
 

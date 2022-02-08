@@ -1,0 +1,56 @@
+before enter mode to MessageInput:
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }, RevisionEntry { selected: false, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+revert to mode: 
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }, RevisionEntry { selected: false, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+stash message: 
+ "test":
+stash entries: 
+ [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }]:
+stash message: 
+ "test":
+stash entries: 
+ [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }]:
+stash args: 
+ ["stash", "save", "test", "--", "src/application.rs"]:
+before enter mode to MessageInput:
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }, RevisionEntry { selected: false, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+revert to mode: 
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }, RevisionEntry { selected: false, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+stash message: 
+ "test":
+stash entries: 
+ [RevisionEntry { selected: true, name: "src/application.rs", status: Modified }]:
+stash args: 
+ ["stash", "push", "--", "src/application.rs"]:
+before enter mode to Stash:
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: false, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3] }, readline: ReadLine { input: "" }, from: Status })
+before enter mode to Status:
+ Stash(Mode { state: Idle, entries: [StashEntry { id: 0, branch: "personal", message: "86ddac7 push to gerrit" }, StashEntry { id: 1, branch: "personal", message: "test -- src/mode/stash.rs" }], output: Output { text: "", line_count: 0, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1] } })
+before enter mode to MessageInput:
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: false, name: "src/application.rs", status: Modified }, RevisionEntry { selected: true, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 1, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+revert to mode: 
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: false, name: "src/application.rs", status: Modified }, RevisionEntry { selected: true, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 1, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+stash message: 
+ "test":
+stash entries: 
+ [RevisionEntry { selected: true, name: "src/backend/git.rs", status: Modified }]:
+stash args: 
+ ["stash", "push", "-m \"", "test", "\" --", "src/backend/git.rs"]:
+before enter mode to MessageInput:
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: false, name: "src/application.rs", status: Modified }, RevisionEntry { selected: true, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 1, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+revert to mode: 
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: false, name: "src/application.rs", status: Modified }, RevisionEntry { selected: true, name: "src/backend/git.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 1, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3, 4] }, readline: ReadLine { input: "" }, from: Status })
+stash message: 
+ "te":
+stash entries: 
+ [RevisionEntry { selected: true, name: "src/backend/git.rs", status: Modified }]:
+stash args: 
+ ["stash", "push", "-m", "te", "--", "src/backend/git.rs"]:
+before enter mode to Stash:
+ Status(Mode { state: Idle, entries: [RevisionEntry { selected: false, name: "src/application.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode.rs", status: Modified }, RevisionEntry { selected: false, name: "src/mode/status.rs", status: Modified }, RevisionEntry { selected: false, name: "test.txt", status: Untracked }], output: Output { text: "## personal...origin/personal", line_count: 1, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1, 2, 3] }, readline: ReadLine { input: "" }, from: Status })
+before enter mode to StashDetails:
+ Stash(Mode { state: Idle, entries: [StashEntry { id: 0, branch: "personal", message: "te" }, StashEntry { id: 1, branch: "personal", message: "test -- src/mode/stash.rs" }], output: Output { text: "", line_count: 0, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1] } })
+revert to mode: 
+ Stash(Mode { state: Idle, entries: [StashEntry { id: 0, branch: "personal", message: "te" }, StashEntry { id: 1, branch: "personal", message: "test -- src/mode/stash.rs" }], output: Output { text: "", line_count: 0, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1] } })
+before enter mode to Status:
+ Stash(Mode { state: Idle, entries: [StashEntry { id: 0, branch: "personal", message: "te" }, StashEntry { id: 1, branch: "personal", message: "test -- src/mode/stash.rs" }], output: Output { text: "", line_count: 0, scroll: 0 }, select: SelectMenu { cursor: 0, scroll: 0 }, filter: Filter { has_focus: false, readline: ReadLine { input: "" }, visible_indices: [0, 1] } })

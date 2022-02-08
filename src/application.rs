@@ -73,7 +73,7 @@ impl Application {
 
     pub fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         if response.mode_kind() == self.mode.mode_kind() {
-            log(format!("kind same, {:?}\n", self.mode.mode_kind()));
+            //log(format!("kind same, {:?}\n", self.mode.mode_kind()));
             self.current_mode().on_response(ctx, response);
         } else {
             log(format!("kind different, {:?}\n", self.mode.mode_kind()));
@@ -97,7 +97,7 @@ impl Application {
     }
 
     pub fn draw_body(&mut self, drawer: &mut Drawer) {
-        log(format!("draw body, mode:\n, {:?}\n", self.mode));
+        //log(format!("draw body, mode:\n, {:?}\n", self.mode));
 
         self.current_mode().draw(drawer);
         drawer.clear_to_bottom();

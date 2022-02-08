@@ -1,6 +1,6 @@
-//use std::fs;
-//use std::io::Write;
 use bounded_vec_deque::BoundedVecDeque;
+use std::fs;
+use std::io::Write;
 use std::sync::Arc;
 
 use crate::{application::EventSender, backend::Backend, platform::Key, ui::Drawer};
@@ -135,7 +135,7 @@ impl ModeBuf {
     }
 
     pub fn revert_mode(&mut self, _ctx: &ModeContext) {
-        log(format!("revert: \n "));
+        //log(format!("revert: \n "));
         if let Some(mode) = self.history.pop_back() {
             log(format!("revert to mode: \n {:?}\n", mode));
             self.mode = mode;
@@ -205,7 +205,7 @@ pub struct ModeContext {
     pub viewport_size: (u16, u16),
 }
 
-pub fn log(_info: String) {
+pub fn log(info: String) {
     //let mut file = fs::OpenOptions::new().write(true).append(true).open("test.txt").expect("log failed");
 
     //file.write_all(info.as_bytes()).unwrap();
