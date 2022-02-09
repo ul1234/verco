@@ -149,94 +149,90 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let pending_input = self.filter.has_focus();
-        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
-
         if self.filter.has_focus() {
             self.filter.on_key(key);
-
             self.filter.filter(self.entries.iter());
             self.select.saturate_cursor(self.filter.visible_indices().len());
-        } else {
-            self.select.on_key(self.filter.visible_indices().len(), available_height, key);
 
-            let current_entry_index = self.filter.get_visible_index(self.select.cursor);
-            if matches!(self.state, State::Idle) && current_entry_index.map(|i| i + 1 == self.entries.len()).unwrap_or(false)
-            {
-                self.state = State::Waiting(WaitOperation::Refresh);
-                let start = self.entries.len();
-                let ctx = ctx.clone();
-                thread::spawn(move || {
-                    let result = ctx.backend.log(start, available_height);
-                    ctx.event_sender.send_response(ModeResponse::Log(Response::Refresh(result)));
-                });
+            return ModeStatus { pending_input: true };
+        }
+
+        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
+        self.select.on_key(self.filter.visible_indices().len(), available_height, key);
+
+        let current_entry_index = self.filter.get_visible_index(self.select.cursor);
+        if matches!(self.state, State::Idle) && current_entry_index.map(|i| i + 1 == self.entries.len()).unwrap_or(false) {
+            self.state = State::Waiting(WaitOperation::Refresh);
+            let start = self.entries.len();
+            let ctx = ctx.clone();
+            thread::spawn(move || {
+                let result = ctx.backend.log(start, available_height);
+                ctx.event_sender.send_response(ModeResponse::Log(Response::Refresh(result)));
+            });
+        }
+
+        if let Key::Enter = key {
+            if let Some(current_entry_index) = current_entry_index {
+                let entry = &self.entries[current_entry_index];
+                ctx.event_sender
+                    .send_mode_change(ModeKind::RevisionDetails, ModeChangeInfo::revision(ModeKind::Log, entry.hash.clone()));
             }
-
-            if let Key::Enter = key {
-                if let Some(current_entry_index) = current_entry_index {
-                    let entry = &self.entries[current_entry_index];
-                    ctx.event_sender.send_mode_change(
-                        ModeKind::RevisionDetails,
-                        ModeChangeInfo::revision(ModeKind::Log, entry.hash.clone()),
-                    );
+        } else if let Key::Tab = key {
+            self.show_full_hovered_message = !self.show_full_hovered_message;
+        } else if let Key::Ctrl('f') = key {
+            self.filter.enter();
+        } else if let State::Idle = self.state {
+            match key {
+                Key::Char('c') => {
+                    if let Some(current_entry_index) = current_entry_index {
+                        let entry = &self.entries[current_entry_index];
+                        self.state = State::Waiting(WaitOperation::Checkout);
+                        let revision = entry.hash.clone();
+                        request(ctx, move |b| b.checkout(&revision));
+                    }
                 }
-            } else if let Key::Tab = key {
-                self.show_full_hovered_message = !self.show_full_hovered_message;
-            } else if let Key::Ctrl('f') = key {
-                self.filter.enter();
-            } else if let State::Idle = self.state {
-                match key {
-                    Key::Char('c') => {
-                        if let Some(current_entry_index) = current_entry_index {
-                            let entry = &self.entries[current_entry_index];
-                            self.state = State::Waiting(WaitOperation::Checkout);
-                            let revision = entry.hash.clone();
-                            request(ctx, move |b| b.checkout(&revision));
-                        }
-                    }
-                    Key::Char('r') => {
-                        if let Some(current_entry_index) = current_entry_index {
-                            let entry = &self.entries[current_entry_index];
-                            self.state = State::Waiting(WaitOperation::Reset);
-                            let revision = entry.hash.clone();
-                            request(ctx, move |b| b.reset(&revision));
-                        }
-                    }
-                    Key::Char('R') => {
+                Key::Char('r') => {
+                    if let Some(current_entry_index) = current_entry_index {
+                        let entry = &self.entries[current_entry_index];
                         self.state = State::Waiting(WaitOperation::Reset);
-                        request(ctx, move |b| b.reset(""));
+                        let revision = entry.hash.clone();
+                        request(ctx, move |b| b.reset(&revision));
                     }
-                    Key::Char('m') => {
-                        if let Some(current_entry_index) = current_entry_index {
-                            let entry = &self.entries[current_entry_index];
-                            self.state = State::Waiting(WaitOperation::Merge);
-                            let revision = entry.hash.clone();
-                            request(ctx, move |b| b.merge(&revision));
-                        }
-                    }
-                    Key::Char('f') => {
-                        self.state = State::Waiting(WaitOperation::Fetch);
-                        request(ctx, Backend::fetch);
-                    }
-                    Key::Char('p') => {
-                        self.state = State::Waiting(WaitOperation::Pull);
-                        request(ctx, Backend::pull);
-                    }
-                    Key::Char('P') => {
-                        self.state = State::Waiting(WaitOperation::Push);
-                        request(ctx, Backend::push);
-                    }
-                    Key::Char('g') => {
-                        self.state = State::Waiting(WaitOperation::Push);
-                        request(ctx, Backend::push_gerrit); // push to gerrit
-                    }
-                    Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
-                    _ => (),
                 }
+                Key::Char('R') => {
+                    self.state = State::Waiting(WaitOperation::Reset);
+                    request(ctx, move |b| b.reset(""));
+                }
+                Key::Char('m') => {
+                    if let Some(current_entry_index) = current_entry_index {
+                        let entry = &self.entries[current_entry_index];
+                        self.state = State::Waiting(WaitOperation::Merge);
+                        let revision = entry.hash.clone();
+                        request(ctx, move |b| b.merge(&revision));
+                    }
+                }
+                Key::Char('f') => {
+                    self.state = State::Waiting(WaitOperation::Fetch);
+                    request(ctx, Backend::fetch);
+                }
+                Key::Char('p') => {
+                    self.state = State::Waiting(WaitOperation::Pull);
+                    request(ctx, Backend::pull);
+                }
+                Key::Char('P') => {
+                    self.state = State::Waiting(WaitOperation::Push);
+                    request(ctx, Backend::push);
+                }
+                Key::Char('g') => {
+                    self.state = State::Waiting(WaitOperation::Push);
+                    request(ctx, Backend::push_gerrit); // push to gerrit
+                }
+                Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
+                _ => (),
             }
         }
 
-        ModeStatus { pending_input }
+        ModeStatus { pending_input: false }
     }
 
     fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {

@@ -1,9 +1,7 @@
 use bounded_vec_deque::BoundedVecDeque;
-use std::fs;
-use std::io::Write;
 use std::sync::Arc;
 
-use crate::{application::EventSender, backend::Backend, platform::Key, ui::Drawer};
+use crate::{application::EventSender, backend::Backend, platform::Key, tool::*, ui::Drawer};
 
 pub mod branches;
 pub mod diff;
@@ -209,12 +207,6 @@ pub struct ModeContext {
     pub backend: Arc<dyn Backend>,
     pub event_sender: EventSender,
     pub viewport_size: (u16, u16),
-}
-
-pub fn log(info: String) {
-    //let mut file = fs::OpenOptions::new().write(true).append(true).open("test.txt").expect("log failed");
-
-    //file.write_all(info.as_bytes()).unwrap();
 }
 
 pub struct ModeStatus {

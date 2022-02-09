@@ -79,9 +79,7 @@ impl ModeTrait for Mode {
     }
 
     fn header(&self) -> (&str, &str, &str) {
-        match self.state {
-            State::Idle | State::Waiting => ("details", "", "[Left]back [arrows]move"),
-        }
+        ("details", "", "[Left]back [arrows]move")
     }
 
     fn draw(&self, drawer: &mut Drawer) {

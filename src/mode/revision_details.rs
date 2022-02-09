@@ -67,69 +67,65 @@ impl ModeTrait for Mode {
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let pending_input = self.filter.has_focus();
-        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
-
         if self.filter.has_focus() {
             self.filter.on_key(key);
             self.filter.filter(self.entries.iter());
             self.select.saturate_cursor(self.filter.visible_indices().len());
-        } else {
-            match self.state {
-                State::Idle => {
-                    let line_count = if self.show_full_message { self.output.line_count() } else { 1 };
 
-                    match self.select.on_key(
-                        self.filter.visible_indices().len(),
-                        available_height.saturating_sub(line_count + 1),
-                        key,
-                    ) {
-                        SelectMenuAction::None => (),
-                        SelectMenuAction::Toggle(i) => {
-                            if let Some(i) = self.filter.get_visible_index(i) {
-                                self.entries[i].selected = !self.entries[i].selected
-                            }
-                        }
-                        SelectMenuAction::ToggleAll => {
-                            let all_selected = self.filter.visible_indices().iter().all(|&i| self.entries[i].selected);
-                            for &i in self.filter.visible_indices() {
-                                self.entries[i].selected = !all_selected;
-                            }
-                        }
-                    }
+            return ModeStatus { pending_input: true };
+        }
 
-                    match key {
-                        Key::Ctrl('f') => self.filter.enter(),
-                        Key::Tab => {
-                            self.show_full_message = !self.show_full_message;
-                        }
-                        Key::Enter => {
-                            if !self.entries.is_empty() {
-                                let entries = self.get_selected_entries();
-                                let ctx = ctx.clone();
-                                let revision = self.revision.clone();
+        if let State::Idle = self.state {
+            let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
+            let line_count = if self.show_full_message { self.output.line_count() } else { 1 };
 
-                                thread::spawn(move || {
-                                    ctx.event_sender
-                                        .send_mode_change(ModeKind::Diff, ModeChangeInfo::new(ModeKind::RevisionDetails));
-
-                                    let output = match ctx.backend.diff(Some(&revision), &entries) {
-                                        Ok(output) => output,
-                                        Err(error) => error,
-                                    };
-                                    ctx.event_sender.send_response(ModeResponse::Diff(diff::Response::Refresh(output)));
-                                });
-                            }
-                        }
-                        Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
-                        _ => (),
+            match self.select.on_key(
+                self.filter.visible_indices().len(),
+                available_height.saturating_sub(line_count + 1),
+                key,
+            ) {
+                SelectMenuAction::None => (),
+                SelectMenuAction::Toggle(i) => {
+                    if let Some(i) = self.filter.get_visible_index(i) {
+                        self.entries[i].selected = !self.entries[i].selected
                     }
                 }
+                SelectMenuAction::ToggleAll => {
+                    let all_selected = self.filter.visible_indices().iter().all(|&i| self.entries[i].selected);
+                    for &i in self.filter.visible_indices() {
+                        self.entries[i].selected = !all_selected;
+                    }
+                }
+            }
+
+            match key {
+                Key::Ctrl('f') => self.filter.enter(),
+                Key::Tab => {
+                    self.show_full_message = !self.show_full_message;
+                }
+                Key::Enter => {
+                    if !self.entries.is_empty() {
+                        let entries = self.get_selected_entries();
+                        let ctx = ctx.clone();
+                        let revision = self.revision.clone();
+
+                        thread::spawn(move || {
+                            ctx.event_sender.send_mode_change(ModeKind::Diff, ModeChangeInfo::new(ModeKind::RevisionDetails));
+
+                            let output = match ctx.backend.diff(Some(&revision), &entries) {
+                                Ok(output) => output,
+                                Err(error) => error,
+                            };
+                            ctx.event_sender.send_response(ModeResponse::Diff(diff::Response::Refresh(output)));
+                        });
+                    }
+                }
+                Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
                 _ => (),
             }
         }
 
-        ModeStatus { pending_input }
+        ModeStatus { pending_input: false }
     }
 
     fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
@@ -139,10 +135,8 @@ impl ModeTrait for Mode {
                 if let State::Waiting = self.state {
                     self.state = State::Idle;
                 }
-                if let State::Idle = self.state {
-                    self.output.set(info.message);
-                }
 
+                self.output.set(info.message);
                 self.entries = info.entries;
 
                 self.filter.filter(self.entries.iter());
@@ -159,13 +153,11 @@ impl ModeTrait for Mode {
     }
 
     fn header(&self) -> (&str, &str, &str) {
-        match self.state {
-            State::Idle | State::Waiting => (
-                "revision details",
-                "[enter]diff",
-                "[tab]full message [Left]back [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
-            ),
-        }
+        (
+            "revision details",
+            "[enter]diff",
+            "[tab]full message [Left]back [arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
+        )
     }
 
     fn draw(&self, drawer: &mut Drawer) {

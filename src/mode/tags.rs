@@ -10,6 +10,7 @@ use crate::{
 pub enum Response {
     Refresh(BackendResult<Vec<TagEntry>>),
     Checkout,
+    New(String),
 }
 
 #[derive(Clone, Debug)]
@@ -23,7 +24,6 @@ enum WaitOperation {
 enum State {
     Idle,
     Waiting(WaitOperation),
-    NewNameInput,
 }
 impl Default for State {
     fn default() -> Self {
@@ -45,7 +45,6 @@ pub struct Mode {
     output: Output,
     select: SelectMenu,
     filter: Filter,
-    readline: ReadLine,
 }
 impl ModeTrait for Mode {
     fn on_enter(&mut self, ctx: &ModeContext, _info: ModeChangeInfo) {
@@ -57,86 +56,73 @@ impl ModeTrait for Mode {
         self.output.set(String::new());
         self.filter.filter(self.entries.iter());
         self.select.saturate_cursor(self.filter.visible_indices().len());
-        self.readline.clear();
 
         request(ctx, |_| Ok(()));
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let pending_input = matches!(self.state, State::NewNameInput) || self.filter.has_focus();
-        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
-
         if self.filter.has_focus() {
             self.filter.on_key(key);
             self.filter.filter(self.entries.iter());
             self.select.saturate_cursor(self.filter.visible_indices().len());
-        } else {
-            match self.state {
-                State::Idle | State::Waiting(_) => {
-                    if self.output.text().is_empty() {
-                        self.select.on_key(self.filter.visible_indices().len(), available_height, key);
-                    } else {
-                        self.output.on_key(available_height, key);
-                    }
 
-                    let current_entry_index = self.filter.get_visible_index(self.select.cursor);
-                    match key {
-                        Key::Ctrl('f') => self.filter.enter(),
-                        Key::Char('g') => {
-                            if let Some(current_entry_index) = current_entry_index {
-                                let entry = &self.entries[current_entry_index];
-                                let name = entry.name.clone();
-                                let ctx = ctx.clone();
-                                thread::spawn(move || match ctx.backend.checkout(&name) {
-                                    Ok(()) => {
-                                        ctx.event_sender.send_response(ModeResponse::Tags(Response::Checkout));
-                                        ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Tags));
-                                    }
-                                    Err(error) => {
-                                        ctx.event_sender.send_response(ModeResponse::Tags(Response::Refresh(Err(error))))
-                                    }
-                                });
-                            }
-                        }
-                        Key::Char('n') => {
-                            self.state = State::NewNameInput;
-                            self.output.set(String::new());
-                            self.filter.clear();
-                            self.readline.clear();
-                        }
-                        Key::Char('D') => {
-                            if let Some(current_entry_index) = current_entry_index {
-                                let entry = &self.entries[current_entry_index];
-                                self.state = State::Waiting(WaitOperation::Delete);
-
-                                let name = entry.name.clone();
-                                self.entries.remove(current_entry_index);
-                                self.filter.on_remove_entry(current_entry_index);
-                                self.select.on_remove_entry(self.select.cursor);
-                                request(ctx, move |b| b.delete_tag(&name));
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-                State::NewNameInput => {
-                    self.readline.on_key(key);
-                    if key.is_submit() {
-                        self.state = State::Waiting(WaitOperation::New);
-
-                        let name = self.readline.input().to_string();
-                        request(ctx, move |b| b.new_tag(&name));
-                    } else if key.is_cancel() {
-                        //self.on_enter(ctx, "");
-                    }
-                }
-            }
+            return ModeStatus { pending_input: true };
         }
 
-        ModeStatus { pending_input }
+        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
+        if self.output.text().is_empty() {
+            self.select.on_key(self.filter.visible_indices().len(), available_height, key);
+        } else {
+            self.output.on_key(available_height, key);
+        }
+
+        let current_entry_index = self.filter.get_visible_index(self.select.cursor);
+        match key {
+            Key::Ctrl('f') => self.filter.enter(),
+            Key::Char('g') => {
+                if let Some(current_entry_index) = current_entry_index {
+                    let entry = &self.entries[current_entry_index];
+                    let name = entry.name.clone();
+                    let ctx = ctx.clone();
+                    thread::spawn(move || match ctx.backend.checkout(&name) {
+                        Ok(()) => {
+                            ctx.event_sender.send_response(ModeResponse::Tags(Response::Checkout));
+                            ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Tags));
+                        }
+                        Err(error) => ctx.event_sender.send_response(ModeResponse::Tags(Response::Refresh(Err(error)))),
+                    });
+                }
+            }
+            Key::Char('n') => {
+                let not_empty = true;
+                let placeholder = "type in the tag name...";
+                let on_submit = |ctx: &ModeContext, message: String| {
+                    ctx.event_sender.send_response(ModeResponse::Tags(Response::New(message)));
+                };
+                ctx.event_sender.send_mode_change(
+                    ModeKind::MessageInput,
+                    ModeChangeInfo::message_input(ModeKind::Branches, not_empty, placeholder, on_submit),
+                );
+            }
+            Key::Char('D') => {
+                if let Some(current_entry_index) = current_entry_index {
+                    let entry = &self.entries[current_entry_index];
+                    self.state = State::Waiting(WaitOperation::Delete);
+
+                    let name = entry.name.clone();
+                    self.entries.remove(current_entry_index);
+                    self.filter.on_remove_entry(current_entry_index);
+                    self.select.on_remove_entry(self.select.cursor);
+                    request(ctx, move |b| b.delete_tag(&name));
+                }
+            }
+            _ => (),
+        }
+
+        ModeStatus { pending_input: false }
     }
 
-    fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
+    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Tags).unwrap();
         match response {
             Response::Refresh(result) => {
@@ -157,12 +143,16 @@ impl ModeTrait for Mode {
                 self.select.saturate_cursor(self.filter.visible_indices().len());
             }
             Response::Checkout => self.state = State::Idle,
+            Response::New(name) => {
+                self.state = State::Waiting(WaitOperation::New);
+                request(ctx, move |b| b.new_tag(&name));
+            }
         }
     }
 
     fn is_waiting_response(&self) -> bool {
         match self.state {
-            State::Idle | State::NewNameInput => false,
+            State::Idle => false,
             State::Waiting(_) => true,
         }
     }
@@ -172,31 +162,22 @@ impl ModeTrait for Mode {
             State::Idle | State::Waiting(WaitOperation::Refresh) => "tags",
             State::Waiting(WaitOperation::New) => "new tag",
             State::Waiting(WaitOperation::Delete) => "delete tag",
-            State::NewNameInput => "new tag name",
         };
-        let (left_help, right_help) = match self.state {
-            State::Idle | State::Waiting(_) => ("[g]checkout [n]new [D]delete", "[arrows]move [ctrl+f]filter"),
-            State::NewNameInput => ("", "[enter]submit [esc]cancel [ctrl+w]delete word [ctrl+u]delete all"),
-        };
+        let (left_help, right_help) = ("[g]checkout [n]new [D]delete", "[arrows]move [ctrl+f]filter");
         (name, left_help, right_help)
     }
 
     fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
-        match self.state {
-            State::Idle | State::Waiting(_) => {
-                if self.output.text.is_empty() {
-                    drawer.select_menu(
-                        &self.select,
-                        filter_line_count,
-                        false,
-                        self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
-                    );
-                } else {
-                    drawer.output(&self.output);
-                }
-            }
-            State::NewNameInput => drawer.readline(&self.readline, "type in the tag name..."),
+        if self.output.text.is_empty() {
+            drawer.select_menu(
+                &self.select,
+                filter_line_count,
+                false,
+                self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
+            );
+        } else {
+            drawer.output(&self.output);
         }
     }
 }

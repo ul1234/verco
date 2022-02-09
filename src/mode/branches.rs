@@ -10,6 +10,7 @@ use crate::{
 pub enum Response {
     Refresh(BackendResult<Vec<BranchEntry>>),
     Checkout(usize),
+    New(String),
     Merge,
 }
 
@@ -26,7 +27,6 @@ enum WaitOperation {
 enum State {
     Idle,
     Waiting(WaitOperation),
-    NewNameInput,
 }
 impl Default for State {
     fn default() -> Self {
@@ -49,7 +49,6 @@ pub struct Mode {
     output: Output,
     select: SelectMenu,
     filter: Filter,
-    readline: ReadLine,
 }
 
 impl Mode {
@@ -72,121 +71,105 @@ impl ModeTrait for Mode {
         self.output.set(String::new());
         self.filter.filter(self.entries.iter());
         self.select.saturate_cursor(self.filter.visible_indices().len());
-        self.readline.clear();
 
         request(ctx, |_| Ok(()));
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
-        let pending_input = matches!(self.state, State::NewNameInput) || self.filter.has_focus();
-        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
-
         if self.filter.has_focus() {
             self.filter.on_key(key);
             self.filter.filter(self.entries.iter());
             self.select.saturate_cursor(self.filter.visible_indices().len());
+
+            return ModeStatus { pending_input: true };
+        }
+
+        let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
+        if self.output.text().is_empty() {
+            self.select.on_key(self.filter.visible_indices().len(), available_height, key);
         } else {
-            match self.state {
-                State::Idle | State::Waiting(_) => {
-                    if self.output.text().is_empty() {
-                        self.select.on_key(self.filter.visible_indices().len(), available_height, key);
+            self.output.on_key(available_height, key);
+        }
+
+        let current_entry_index = self.filter.get_visible_index(self.select.cursor);
+        match key {
+            Key::Ctrl('f') => self.filter.enter(),
+            Key::Enter => {
+                if let Some(current_entry_index) = current_entry_index {
+                    let entry = &self.entries[current_entry_index];
+                    let name = entry.name.clone();
+                    let ctx = ctx.clone();
+
+                    if entry.checked_out {
+                        ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
                     } else {
-                        self.output.on_key(available_height, key);
-                    }
+                        self.state = State::Waiting(WaitOperation::Checkout);
 
-                    let current_entry_index = self.filter.get_visible_index(self.select.cursor);
-                    match key {
-                        Key::Ctrl('f') => self.filter.enter(),
-                        Key::Enter => {
-                            if let Some(current_entry_index) = current_entry_index {
-                                let entry = &self.entries[current_entry_index];
-                                let name = entry.name.clone();
-                                let ctx = ctx.clone();
-
-                                if entry.checked_out {
-                                    ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
-                                } else {
-                                    self.state = State::Waiting(WaitOperation::Checkout);
-
-                                    thread::spawn(move || match ctx.backend.checkout(&name) {
-                                        Ok(()) => {
-                                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Checkout(
-                                                current_entry_index,
-                                            )));
-                                            ctx.event_sender
-                                                .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
-                                        }
-                                        Err(error) => {
-                                            ctx.event_sender
-                                                .send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
-                                        }
-                                    });
-                                }
+                        thread::spawn(move || match ctx.backend.checkout(&name) {
+                            Ok(()) => {
+                                ctx.event_sender
+                                    .send_response(ModeResponse::Branches(Response::Checkout(current_entry_index)));
+                                ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
                             }
-                        }
-                        Key::Char('n') => {
-                            self.state = State::NewNameInput;
-                            self.output.set(String::new());
-                            self.filter.clear();
-                            self.readline.clear();
-                        }
-                        c @ Key::Char('D') | c @ Key::Char('d') => {
-                            if let Some(current_entry_index) = current_entry_index {
-                                let entry = &self.entries[current_entry_index];
-                                self.state = State::Waiting(WaitOperation::Delete);
-
-                                let name = entry.name.clone();
-                                self.entries.remove(current_entry_index);
-                                self.filter.on_remove_entry(current_entry_index);
-                                self.select.on_remove_entry(self.select.cursor);
-
-                                let force = c == Key::Char('D'); // D means force delete
-
-                                request(ctx, move |b| b.delete_branch(&name, force));
+                            Err(error) => {
+                                ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
                             }
-                        }
-                        Key::Char('m') => {
-                            if let Some(current_entry_index) = current_entry_index {
-                                let entry = &self.entries[current_entry_index];
-                                self.state = State::Waiting(WaitOperation::Merge);
-
-                                let name = entry.name.clone();
-                                let ctx = ctx.clone();
-                                thread::spawn(move || match ctx.backend.merge(&name) {
-                                    Ok(()) => {
-                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Merge));
-                                        ctx.event_sender
-                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
-                                    }
-                                    Err(error) => {
-                                        ctx.event_sender
-                                            .send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
-                                        ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
-                                    }
-                                });
-                            }
-                        }
-                        _ => (),
-                    }
-                }
-                State::NewNameInput => {
-                    self.readline.on_key(key);
-                    if key.is_submit() {
-                        self.state = State::Waiting(WaitOperation::New);
-
-                        let name = self.readline.input().to_string();
-                        request(ctx, move |b| b.new_branch(&name));
-                    } else if key.is_cancel() {
-                        //self.on_enter(ctx, "");
+                        });
                     }
                 }
             }
+            Key::Char('n') => {
+                let not_empty = true;
+                let placeholder = "type in the branch name...";
+                let on_submit = |ctx: &ModeContext, message: String| {
+                    ctx.event_sender.send_response(ModeResponse::Branches(Response::New(message)));
+                };
+                ctx.event_sender.send_mode_change(
+                    ModeKind::MessageInput,
+                    ModeChangeInfo::message_input(ModeKind::Branches, not_empty, placeholder, on_submit),
+                );
+            }
+            c @ Key::Char('D') | c @ Key::Char('d') => {
+                if let Some(current_entry_index) = current_entry_index {
+                    let entry = &self.entries[current_entry_index];
+                    self.state = State::Waiting(WaitOperation::Delete);
+
+                    let name = entry.name.clone();
+                    self.entries.remove(current_entry_index);
+                    self.filter.on_remove_entry(current_entry_index);
+                    self.select.on_remove_entry(self.select.cursor);
+
+                    let force = c == Key::Char('D'); // D means force delete
+
+                    request(ctx, move |b| b.delete_branch(&name, force));
+                }
+            }
+            Key::Char('m') => {
+                if let Some(current_entry_index) = current_entry_index {
+                    let entry = &self.entries[current_entry_index];
+                    self.state = State::Waiting(WaitOperation::Merge);
+
+                    let name = entry.name.clone();
+                    let ctx = ctx.clone();
+                    thread::spawn(move || match ctx.backend.merge(&name) {
+                        Ok(()) => {
+                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Merge));
+                            ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                        }
+                        Err(error) => {
+                            ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Branches));
+                            ctx.event_sender.send_response(ModeResponse::Branches(Response::Refresh(Err(error))));
+                        }
+                    });
+                }
+            }
+            _ => (),
         }
 
-        ModeStatus { pending_input }
+        ModeStatus { pending_input: false }
     }
 
-    fn on_response(&mut self, _ctx: &ModeContext, response: ModeResponse) {
+    fn on_response(&mut self, ctx: &ModeContext, response: ModeResponse) {
         let response = as_variant!(response, ModeResponse::Branches).unwrap();
         match response {
             Response::Refresh(result) => {
@@ -217,12 +200,16 @@ impl ModeTrait for Mode {
                 self.set_checkout(entry_index);
             }
             Response::Merge => self.state = State::Idle,
+            Response::New(message) => {
+                self.state = State::Waiting(WaitOperation::New);
+                request(ctx, move |b| b.new_branch(&message));
+            }
         }
     }
 
     fn is_waiting_response(&self) -> bool {
         match self.state {
-            State::Idle | State::NewNameInput => false,
+            State::Idle => false,
             State::Waiting(_) => true,
         }
     }
@@ -234,33 +221,23 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::Delete) => "delete branch",
             State::Waiting(WaitOperation::Merge) => "merge branch",
             State::Waiting(WaitOperation::Checkout) => "checkout",
-            State::NewNameInput => "new branch name",
         };
-        let (left_help, right_help) = match self.state {
-            State::Idle | State::Waiting(_) => {
-                ("[enter]checkout [n]new [d]delete [D]force delete [m]merge", "[arrows]move [ctrl+f]filter")
-            }
-            State::NewNameInput => ("", "[enter]submit [esc]cancel [ctrl+w]delete word [ctrl+u]delete all"),
-        };
+        let (left_help, right_help) =
+            ("[enter]checkout [n]new [d]delete [D]force delete [m]merge", "[arrows]move [ctrl+f]filter");
         (name, left_help, right_help)
     }
 
     fn draw(&self, drawer: &mut Drawer) {
         let filter_line_count = drawer.filter(&self.filter);
-        match self.state {
-            State::Idle | State::Waiting(_) => {
-                if self.output.text.is_empty() {
-                    drawer.select_menu(
-                        &self.select,
-                        filter_line_count,
-                        false,
-                        self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
-                    );
-                } else {
-                    drawer.output(&self.output);
-                }
-            }
-            State::NewNameInput => drawer.readline(&self.readline, "type in the branch name..."),
+        if self.output.text.is_empty() {
+            drawer.select_menu(
+                &self.select,
+                filter_line_count,
+                false,
+                self.filter.visible_indices().iter().map(|&i| &self.entries[i]),
+            );
+        } else {
+            drawer.output(&self.output);
         }
     }
 }

@@ -1,5 +1,6 @@
 use std::{
     io,
+    io::Write,
     sync::{mpsc, Arc},
     thread,
     time::Duration,
@@ -9,6 +10,7 @@ use crate::{
     backend::Backend,
     mode::*,
     platform::{Key, Platform, PlatformEventReader},
+    tool::*,
     ui::Drawer,
 };
 
@@ -177,7 +179,6 @@ pub fn run(platform_event_reader: PlatformEventReader, backend: Arc<dyn Backend>
         if draw_body {}
         stdout_buf = drawer.take_buf();
 
-        use io::Write;
         stdout.write_all(&stdout_buf).unwrap();
         stdout.flush().unwrap();
     }

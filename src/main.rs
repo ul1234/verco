@@ -6,6 +6,7 @@ mod application;
 mod backend;
 mod mode;
 mod platform;
+mod tool;
 mod ui;
 
 fn main() {
