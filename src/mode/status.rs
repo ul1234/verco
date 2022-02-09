@@ -98,6 +98,29 @@ impl Mode {
             self.filter.clear();
         }
     }
+
+    fn commit<S: Into<String>>(&mut self, ctx: &ModeContext, message: S, amend: bool) {
+        self.state = State::Waiting(WaitOperation::Commit);
+
+        let entries = self.get_selected_entries();
+        self.remove_selected_entries();
+
+        let message = message.into();
+
+        //log(format!("commit message: \n {:?}:\n", message));
+
+        let ctx = ctx.clone();
+        thread::spawn(move || match ctx.backend.commit(&message, &entries, amend) {
+            Ok(()) => {
+                log(format!("commit ok\n"));
+                ctx.event_sender.send_response(ModeResponse::Status(Response::Idle));
+                ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Status));
+            }
+            Err(error) => ctx
+                .event_sender
+                .send_response(ModeResponse::Status(Response::Refresh(StatusInfo { header: error, entries: Vec::new() }))),
+        });
+    }
 }
 
 impl ModeTrait for Mode {
@@ -151,14 +174,20 @@ impl ModeTrait for Mode {
                         Key::Ctrl('f') => self.filter.enter(),
                         Key::Char('c') => {
                             if !self.entries.is_empty() {
-                                let placeholder = "type in the commit message...".to_owned();
+                                let not_empty = true;
+                                let placeholder = "type in the commit message...";
                                 let on_submit = |ctx: &ModeContext, message: String| {
                                     ctx.event_sender.send_response(ModeResponse::Status(Response::Commit(message)))
                                 };
                                 ctx.event_sender.send_mode_change(
                                     ModeKind::MessageInput,
-                                    ModeChangeInfo::message_input(ModeKind::Status, placeholder, on_submit),
+                                    ModeChangeInfo::message_input(ModeKind::Status, not_empty, placeholder, on_submit),
                                 );
+                            }
+                        }
+                        Key::Char('a') => {
+                            if !self.entries.is_empty() {
+                                self.commit(ctx, "", true);
                             }
                         }
                         Key::Char('D') => {
@@ -188,13 +217,14 @@ impl ModeTrait for Mode {
                         }
                         Key::Ctrl('s') => {
                             if !self.entries.is_empty() {
-                                let placeholder = "type in the stash message...".to_owned();
+                                let not_empty = false;
+                                let placeholder = "type in the stash message...";
                                 let on_submit = |ctx: &ModeContext, message: String| {
                                     ctx.event_sender.send_response(ModeResponse::Status(Response::Stash(message)))
                                 };
                                 ctx.event_sender.send_mode_change(
                                     ModeKind::MessageInput,
-                                    ModeChangeInfo::message_input(ModeKind::Status, placeholder, on_submit),
+                                    ModeChangeInfo::message_input(ModeKind::Status, not_empty, placeholder, on_submit),
                                 );
                             }
                         }
@@ -239,27 +269,7 @@ impl ModeTrait for Mode {
                 self.filter.filter(self.entries.iter());
                 self.select.saturate_cursor(self.filter.visible_indices().len());
             }
-            Response::Commit(message) => {
-                self.state = State::Waiting(WaitOperation::Commit);
-
-                let entries = self.get_selected_entries();
-                self.remove_selected_entries();
-
-                //log(format!("commit message: \n {:?}:\n", message));
-
-                let ctx = ctx.clone();
-                thread::spawn(move || match ctx.backend.commit(&message, &entries) {
-                    Ok(()) => {
-                        log(format!("commit ok\n"));
-                        ctx.event_sender.send_response(ModeResponse::Status(Response::Idle));
-                        ctx.event_sender.send_mode_change(ModeKind::Log, ModeChangeInfo::new(ModeKind::Status));
-                    }
-                    Err(error) => ctx.event_sender.send_response(ModeResponse::Status(Response::Refresh(StatusInfo {
-                        header: error,
-                        entries: Vec::new(),
-                    }))),
-                });
-            }
+            Response::Commit(message) => self.commit(ctx, message, false),
             Response::Stash(message) => {
                 self.state = State::Waiting(WaitOperation::Stash);
 
@@ -292,7 +302,7 @@ impl ModeTrait for Mode {
         };
         let (left_help, right_help) = match self.state {
             State::Idle | State::Waiting(_) => (
-                "[c]commit [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
+                "[c]commit [a]amend [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
                 "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
             ),
         };

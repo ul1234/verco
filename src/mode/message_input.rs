@@ -18,12 +18,13 @@ impl fmt::Debug for OnSubmit {
 }
 #[derive(Clone, Debug)]
 pub struct ModeInfo {
+    pub not_empty: bool, // the submit string must be not empty
     pub placeholder: String,
     pub on_submit: OnSubmit,
 }
 impl ModeInfo {
-    pub fn new(placeholder: String, on_submit: fn(ctx: &ModeContext, message: String)) -> Self {
-        Self { placeholder, on_submit: OnSubmit(on_submit) }
+    pub fn new(not_empty: bool, placeholder: String, on_submit: fn(ctx: &ModeContext, message: String)) -> Self {
+        Self { not_empty, placeholder, on_submit: OnSubmit(on_submit) }
     }
 }
 
@@ -33,6 +34,7 @@ pub struct Mode {
     from: ModeKind,
     placeholder: String,
     on_submit: OnSubmit,
+    not_empty: bool,
 }
 
 impl ModeTrait for Mode {
@@ -42,15 +44,19 @@ impl ModeTrait for Mode {
         let mode_info = as_variant!(info.info.unwrap(), super::ModeInfo::MessageInput).unwrap();
         self.placeholder = mode_info.placeholder;
         self.on_submit = mode_info.on_submit;
+        self.not_empty = mode_info.not_empty;
     }
 
     fn on_key(&mut self, ctx: &ModeContext, key: Key) -> ModeStatus {
         self.readline.on_key(key);
-        if key.is_submit() || key.is_cancel() {
-            ctx.event_sender.send_mode_revert();
 
-            if key.is_submit() {
-                let message = self.readline.input().to_string();
+        if key.is_cancel() {
+            ctx.event_sender.send_mode_revert();
+        } else if key.is_submit() {
+            let message = self.readline.input().to_string();
+            // when submit should not be empty, just do nothing if no message input
+            if !(message.is_empty() && self.not_empty) {
+                ctx.event_sender.send_mode_revert();
                 self.on_submit.0(ctx, message);
             }
         }

@@ -133,7 +133,7 @@ impl FilterEntry for StashEntry {
 
 pub trait Backend: 'static + Send + Sync {
     fn status(&self) -> BackendResult<StatusInfo>;
-    fn commit(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()>;
+    fn commit(&self, message: &str, entries: &[RevisionEntry], amend: bool) -> BackendResult<()>;
     fn discard(&self, entries: &[RevisionEntry]) -> BackendResult<()>;
     fn diff(&self, revision: Option<&str>, entries: &[RevisionEntry]) -> BackendResult<String>;
     fn resolve_taking_ours(&self, entries: &[RevisionEntry]) -> BackendResult<()>;

@@ -53,13 +53,11 @@ impl Backend for Git {
         Ok(StatusInfo { header, entries })
     }
 
-    fn commit(&self, message: &str, entries: &[RevisionEntry]) -> BackendResult<()> {
+    fn commit(&self, message: &str, entries: &[RevisionEntry], amend: bool) -> BackendResult<()> {
         if entries.is_empty() {
             Process::spawn("git", &["add", "--all"])?.wait()?;
         } else {
-            let mut args = Vec::new();
-            args.push("add");
-            args.push("--");
+            let mut args = vec!["add", "--"];
             for entry in entries {
                 args.push(&entry.name);
             }
@@ -67,7 +65,11 @@ impl Backend for Git {
             Process::spawn("git", &args)?.wait()?;
         }
 
-        Process::spawn("git", &["commit", "-m", message])?.wait()?;
+        if amend {
+            Process::spawn("git", &["commit", "--amend", "--no-edit"])?.wait()?;
+        } else {
+            Process::spawn("git", &["commit", "-m", message])?.wait()?;
+        }
         Ok(())
     }
 
@@ -259,11 +261,8 @@ impl Backend for Git {
         if entries.is_empty() {
             Process::spawn("git", &["stash", "save", message])?.wait()?;
         } else {
-            let mut args = if message.is_empty() {
-                vec!["stash", "push", "--"]
-            } else {
-                vec!["stash", "push", "-m", message, "--"]
-            };
+            let mut args =
+                if message.is_empty() { vec!["stash", "push", "--"] } else { vec!["stash", "push", "-m", message, "--"] };
             for entry in entries {
                 args.push(&entry.name);
             }
