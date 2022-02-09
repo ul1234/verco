@@ -102,11 +102,7 @@ impl Backend for Git {
                 if entries.is_empty() {
                     Process::spawn("git", &["diff", &parent, revision])?.wait()
                 } else {
-                    let mut args = Vec::new();
-                    args.push("diff");
-                    args.push(&parent);
-                    args.push(revision);
-                    args.push("--");
+                    let mut args = vec!["diff", &parent, revision, "--"];
                     for entry in entries {
                         args.push(&entry.name);
                     }
@@ -118,9 +114,7 @@ impl Backend for Git {
                 if entries.is_empty() {
                     Process::spawn("git", &["diff", "-z"])?.wait()
                 } else {
-                    let mut args = Vec::new();
-                    args.push("diff");
-                    args.push("--");
+                    let mut args = vec!["diff", "--"];
                     for entry in entries {
                         args.push(&entry.name);
                     }
@@ -138,11 +132,7 @@ impl Backend for Git {
                 return Ok(());
             }
 
-            let mut args = Vec::new();
-            args.push("checkout");
-            args.push("--ours");
-            args.push("--");
-
+            let mut args = vec!["checkout", "--ours", "--"];
             for entry in entries {
                 if let FileStatus::Unmerged = entry.status {
                     args.push(&entry.name);
@@ -163,11 +153,7 @@ impl Backend for Git {
                 return Ok(());
             }
 
-            let mut args = Vec::new();
-            args.push("checkout");
-            args.push("--theirs");
-            args.push("--");
-
+            let mut args = vec!["checkout", "--theirs", "--"];
             for entry in entries {
                 if let FileStatus::Unmerged = entry.status {
                     args.push(&entry.name);

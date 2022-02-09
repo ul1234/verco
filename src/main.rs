@@ -1,4 +1,4 @@
-use std::{env, io};
+use std::{env, io, io::Write};
 
 #[macro_use]
 mod macros;
@@ -55,7 +55,6 @@ fn main() {
     };
 
     {
-        use io::Write;
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
 
@@ -70,7 +69,6 @@ fn main() {
     application::run(platform_event_reader, backend);
 
     {
-        use io::Write;
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
 

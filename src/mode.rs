@@ -164,10 +164,12 @@ impl ModeChangeInfo {
         Self { from, info: Some(ModeInfo::StashDetails(stash_id)) }
     }
 
-    pub fn message_input<S>(from: ModeKind, not_empty: bool, placeholder: S, on_submit: fn(&ModeContext, String)) -> Self
-    where
-        S: Into<String>,
-    {
+    pub fn message_input<S: Into<String>>(
+        from: ModeKind,
+        not_empty: bool,
+        placeholder: S,
+        on_submit: fn(&ModeContext, String),
+    ) -> Self {
         Self {
             from,
             info: Some(ModeInfo::MessageInput(message_input::ModeInfo::new(not_empty, placeholder.into(), on_submit))),
