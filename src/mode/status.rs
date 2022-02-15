@@ -105,8 +105,7 @@ impl Mode {
         self.remove_selected_entries();
 
         let message = message.into();
-
-        //log(format!("commit message: \n {:?}:\n", message));
+        //log(format!("amend: {}, commit message: \n {:?}, entries: {:?}\n", amend, message, entries));
 
         let ctx = ctx.clone();
         thread::spawn(move || match ctx.backend.commit(&message, &entries, amend) {
@@ -181,7 +180,7 @@ impl ModeTrait for Mode {
                     );
                 }
             }
-            Key::Char('a') => {
+            Key::Char('A') => {
                 if !self.entries.is_empty() {
                     self.commit(ctx, "", true);
                 }
@@ -294,7 +293,7 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::ResolveTakingTheirs) => "resolve taking theirs",
         };
         let (left_help, right_help) = (
-            "[c]commit [a]amend [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
+            "[c]commit [A]amend [D]discard [ctrl+s]stash [enter]diff [O]take ours [T]take theirs",
             "[arrows]move [space]toggle [a]toggle all [ctrl+f]filter",
         );
         (name, left_help, right_help)
