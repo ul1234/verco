@@ -43,13 +43,6 @@ impl ModeTrait for Mode {
                     let available_height = (ctx.viewport_size.1 as usize).saturating_sub(RESERVED_LINES_COUNT);
                     self.output.on_key(available_height, key);
                 }
-
-                match key {
-                    Key::Char('q') | Key::Left => {
-                        ctx.event_sender.send_mode_revert();
-                    }
-                    _ => (),
-                }
             }
             _ => (),
         }

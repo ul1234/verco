@@ -57,6 +57,10 @@ impl Key {
     pub fn is_exit(&self) -> bool {
         matches!(self, Self::Ctrl('c'))
     }
+
+    pub fn is_back(&self) -> bool {
+        matches!(self, Key::Left)
+    }
 }
 
 // ========================================================= UNIX

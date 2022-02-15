@@ -56,6 +56,11 @@ impl Application {
                 return false;
             }
 
+            if key.is_back() {
+                self.mode.revert_mode(ctx);
+                return true;
+            }
+
             let target_mode_kind = match key {
                 Key::Char('s') => Some(ModeKind::Status),
                 Key::Char('l') => Some(ModeKind::Log),

@@ -70,7 +70,6 @@ impl ModeTrait for Mode {
                         ctx.event_sender.send_response(ModeResponse::Diff(diff::Response::Refresh(output)));
                     });
                 }
-                Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
                 _ => (),
             }
         }

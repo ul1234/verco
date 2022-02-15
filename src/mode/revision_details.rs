@@ -120,7 +120,6 @@ impl ModeTrait for Mode {
                         });
                     }
                 }
-                Key::Char('q') | Key::Left => ctx.event_sender.send_mode_revert(),
                 _ => (),
             }
         }

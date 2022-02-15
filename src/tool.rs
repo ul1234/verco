@@ -13,7 +13,8 @@ pub fn log_init() {
 
 pub fn log<S: Into<String>>(info: S) {
     if LOG_TO_FILE_ENABLE {
-        let mut file = fs::OpenOptions::new().write(true).append(true).create(true).open(LOG_FILE_NAME).expect("log file open failed!");
+        let mut file =
+            fs::OpenOptions::new().write(true).append(true).create(true).open(LOG_FILE_NAME).expect("log file open failed!");
         file.write_all(info.into().as_bytes()).unwrap();
     }
 }

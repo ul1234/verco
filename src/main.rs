@@ -11,7 +11,7 @@ mod ui;
 
 fn main() {
     tool::log_init();
-    
+
     let mut args = env::args();
     args.next();
     if let Some(arg) = args.next() {
