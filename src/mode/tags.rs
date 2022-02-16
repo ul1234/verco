@@ -79,7 +79,7 @@ impl ModeTrait for Mode {
         let current_entry_index = self.filter.get_visible_index(self.select.cursor);
         match key {
             Key::Ctrl('f') => self.filter.enter(),
-            Key::Char('g') => {
+            Key::Enter => {
                 if let Some(current_entry_index) = current_entry_index {
                     let entry = &self.entries[current_entry_index];
                     let name = entry.name.clone();
@@ -163,7 +163,7 @@ impl ModeTrait for Mode {
             State::Waiting(WaitOperation::New) => "new tag",
             State::Waiting(WaitOperation::Delete) => "delete tag",
         };
-        let (left_help, right_help) = ("[g]checkout [n]new [D]delete", "[arrows]move [ctrl+f]filter");
+        let (left_help, right_help) = ("[enter]checkout [n]new [D]delete", "[arrows]move [ctrl+f]filter");
         (name, left_help, right_help)
     }
 
